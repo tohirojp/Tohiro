@@ -20,6 +20,11 @@
 </head>
 <body>
 <div id="msg">十浩下單 載入中…</div>
-<iframe id="f" src="https://script.google.com/macros/s/AKfycby-Ju1DJELS3W9VICyIgvSNcQFd_gAqsETZwGoZQcmFq74d-6RuNwjqekYDT-Toql_9Wg/exec" allow="clipboard-write" onload="document.getElementById('msg').style.display='none'"></iframe>
+<iframe id="f" allow="clipboard-write" onload="document.getElementById('msg').style.display='none'"></iframe>
+<script>
+  // 網址後面的 ?c=客戶代碼 會一起帶給下單網站（批發客專屬連結）
+  var m = location.search.match(/[?&]c=([A-Za-z0-9_-]+)/);
+  document.getElementById('f').src = 'https://script.google.com/macros/s/AKfycby-Ju1DJELS3W9VICyIgvSNcQFd_gAqsETZwGoZQcmFq74d-6RuNwjqekYDT-Toql_9Wg/exec' + (m ? '?c=' + m[1] : '');
+</script>
 </body>
 </html>
