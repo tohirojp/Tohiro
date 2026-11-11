@@ -11,7 +11,6 @@
 <meta name="theme-color" content="#ffffff">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">
-<link rel="manifest" href="manifest.json">
 <style>
   html,body{margin:0;height:100%;background:#fff;}
   iframe{position:fixed;inset:0;width:100%;height:100%;border:0;padding-top:env(safe-area-inset-top);box-sizing:border-box;background:#fff;}
@@ -24,6 +23,15 @@
 <script>
   // 網址後面的 ?c=客戶代碼 會一起帶給下單網站（批發客專屬連結）
   var m = location.search.match(/[?&]c=([A-Za-z0-9_-]+)/);
+  // 加到主畫面時保留客戶代碼
+  var base = location.origin + location.pathname;
+  var man = {name:'十浩下單', short_name:'十浩下單', start_url: base + (m ? '?c=' + m[1] : ''), display:'standalone',
+    background_color:'#ffffff', theme_color:'#ffffff',
+    icons:[{src: base.replace(/[^/]*$/, '') + 'icon-192.png', sizes:'192x192', type:'image/png'},
+           {src: base.replace(/[^/]*$/, '') + 'icon-512.png', sizes:'512x512', type:'image/png'}]};
+  var l = document.createElement('link'); l.rel = 'manifest';
+  l.href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(man));
+  document.head.appendChild(l);
   document.getElementById('f').src = 'https://script.google.com/macros/s/AKfycby-Ju1DJELS3W9VICyIgvSNcQFd_gAqsETZwGoZQcmFq74d-6RuNwjqekYDT-Toql_9Wg/exec' + (m ? '?c=' + m[1] : '');
 </script>
 </body>
