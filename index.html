@@ -53,7 +53,14 @@
     document.head.appendChild(ml);
   }
   setManifest(m ? '專屬訂購' : '十浩下單', !m);
-  document.getElementById('f').src = 'https://script.google.com/macros/s/AKfycby-Ju1DJELS3W9VICyIgvSNcQFd_gAqsETZwGoZQcmFq74d-6RuNwjqekYDT-Toql_9Wg/exec' + (m ? '?shop=' + m[1] : '');
+  var appUrl = 'https://script.google.com/macros/s/AKfycby-Ju1DJELS3W9VICyIgvSNcQFd_gAqsETZwGoZQcmFq74d-6RuNwjqekYDT-Toql_9Wg/exec' + (m ? '?shop=' + m[1] : '');
+  // Instagram／Facebook／LINE 等 App 內建瀏覽器不讓嵌進來的 Google 頁面顯示（整頁空白），改成直接跳到下單頁
+  if (/Instagram|FBAN|FBAV|FB_IAB|FBIOS|Line\/|KAKAOTALK|MicroMessenger|Threads|Barcelona/i.test(navigator.userAgent)) {
+    document.getElementById('f').style.display = 'none';
+    location.replace(appUrl);
+  } else {
+    document.getElementById('f').src = appUrl;
+  }
 </script>
 </body>
 </html>
