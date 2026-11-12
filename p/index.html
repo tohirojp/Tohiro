@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>專屬訂購</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="專屬訂購">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="data:,">
+<style>
+  html,body{margin:0;height:100%;background:#fff;}
+  iframe{position:fixed;inset:0;width:100%;height:100%;border:0;padding-top:env(safe-area-inset-top);box-sizing:border-box;background:#fff;}
+  #msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font:16px -apple-system,sans-serif;color:#888;}
+</style>
+</head>
+<body>
+<div id="msg">載入中…</div>
+<iframe id="f" allow="clipboard-write" onload="document.getElementById('msg').style.display='none'"></iframe>
+<script>
+  // 網址後面的 ?shop=客戶代碼 會一起帶給下單網站（批發客專屬連結）
+  var m = location.search.match(/[?&]shop=([A-Za-z0-9_-]+)/);
+  // 這個 /p/ 頁面是批發客專用：連結預覽（LINE 等）不會出現十浩名稱與 Logo
+  // 批發客專屬連結：不顯示十浩名稱與 Logo（主畫面圖示、分頁標題）
+  if (m) {
+    document.title = '專屬訂購';
+    document.getElementById('msg').textContent = '載入中…';
+    var saved = [['apple-touch-icon','../apple-touch-icon.png'],['icon','../icon-192.png']].map(function (a) { var l = document.createElement('link'); l.rel = a[0]; l.href = a[1]; return l; });
+    var t = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (t) t.content = '專屬訂購';
+    // 下單網站回報這個連結要顯示十浩品牌時，把 Logo 圖示和名稱放回來
+    window.addEventListener('message', function (e) {
+      if (!e.data || e.data.oaBrand !== true) return;
+      document.title = '十浩下單';
+      if (t) t.content = '十浩下單';
+      saved.forEach(function (x) { document.head.appendChild(x); });
+      setManifest('十浩下單', true);
+    });
+  }
+  // 加到主畫面時保留客戶代碼
+  var base = location.origin + location.pathname;
+  var ml = null;
+  function setManifest(nm, withIcons) {
+    var man = {name: nm, short_name: nm, start_url: base + (m ? '?shop=' + m[1] : ''), display:'standalone',
+      background_color:'#ffffff', theme_color:'#ffffff',
+      icons: withIcons ? [{src: base.replace(/[^/]*$/, '') + '../icon-192.png', sizes:'192x192', type:'image/png'},
+             {src: base.replace(/[^/]*$/, '') + '../icon-512.png', sizes:'512x512', type:'image/png'}] : []};
+    if (ml) ml.remove();
+    ml = document.createElement('link'); ml.rel = 'manifest';
+    ml.href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(man));
+    document.head.appendChild(ml);
+  }
+  setManifest(m ? '專屬訂購' : '十浩下單', !m);
+  document.getElementById('f').src = 'https://script.google.com/macros/s/AKfycby-Ju1DJELS3W9VICyIgvSNcQFd_gAqsETZwGoZQcmFq74d-6RuNwjqekYDT-Toql_9Wg/exec' + (m ? '?shop=' + m[1] : '');
+</script>
+</body>
+</html>
