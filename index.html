@@ -23,11 +23,19 @@
 <script>
   // 網址後面的 ?shop=客戶代碼 會一起帶給下單網站（批發客專屬連結）
   var m = location.search.match(/[?&]shop=([A-Za-z0-9_-]+)/);
+  // 批發客專屬連結：不顯示十浩名稱與 Logo（主畫面圖示、分頁標題）
+  if (m) {
+    document.title = '專屬訂購';
+    document.getElementById('msg').textContent = '載入中…';
+    document.querySelectorAll('link[rel="apple-touch-icon"],link[rel="icon"]').forEach(function (x) { x.remove(); });
+    var t = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (t) t.content = '專屬訂購';
+  }
   // 加到主畫面時保留客戶代碼
   var base = location.origin + location.pathname;
-  var man = {name:'十浩下單', short_name:'十浩下單', start_url: base + (m ? '?shop=' + m[1] : ''), display:'standalone',
+  var nm = m ? '專屬訂購' : '十浩下單';
+  var man = {name: nm, short_name: nm, start_url: base + (m ? '?shop=' + m[1] : ''), display:'standalone',
     background_color:'#ffffff', theme_color:'#ffffff',
-    icons:[{src: base.replace(/[^/]*$/, '') + 'icon-192.png', sizes:'192x192', type:'image/png'},
+    icons: m ? [] : [{src: base.replace(/[^/]*$/, '') + 'icon-192.png', sizes:'192x192', type:'image/png'},
            {src: base.replace(/[^/]*$/, '') + 'icon-512.png', sizes:'512x512', type:'image/png'}]};
   var l = document.createElement('link'); l.rel = 'manifest';
   l.href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(man));
