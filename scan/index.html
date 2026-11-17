@@ -54,31 +54,61 @@
   <input type="file" id="file" accept="image/*" capture="environment">
   <div class="manual"><input id="code" inputmode="numeric" placeholder="手動輸入條碼或商品コード"><button class="btn" id="go">查詢</button></div>
   <div class="note" id="note">相機會一直開著，掃到就直接顯示訂購／已買／剩餘，<b>不會自動採買</b>。要採買時按「到採買頁確認採買」。<br>第一次使用請允許相機。</div>
+  <div class="note" id="stat"></div>
 </div>
 <script>
 (function(){
   // 只允許回到十浩的 Google Apps Script 網站（避免被拿去轉址到別的網站）
   var q = new URLSearchParams(location.search), ret = q.get('ret') || '';
   if (!/^https:\/\/script\.google\.com\/(a\/[^\/]+\/)?macros\/s\/[A-Za-z0-9_-]+\/(exec|dev)$/.test(ret)) ret = '';
-  // 採購網站帶來的登入憑證和店家，掃完原樣帶回去（不用每次重新登入）
-  var tk = q.get('t') || '', st = q.get('s');
-  var TK_KEY = 'shihao_scan_tk';
-  if (!/^[A-Za-z0-9-]{10,80}$/.test(tk)) tk = '';
-  try { if (tk) localStorage.setItem(TK_KEY, tk); else tk = localStorage.getItem(TK_KEY) || ''; } catch (e) {}
+  // 登入：網址只帶「一次性交接碼」k（10 分鐘內有效、用一次就失效），換到的登入狀態存在這個網站自己的手機儲存空間，
+  // 之後連續掃描都不用再登入；採購網站按「登出」或登入過期（6 小時）才需要重新登入。
+  var kt = q.get('k') || '', st = q.get('s'), tk = '', TK_KEY = 'shihao_scan_tk';
+  if (!/^[A-Za-z0-9]{20,64}$/.test(kt)) kt = '';
+  try { tk = localStorage.getItem(TK_KEY) || ''; } catch (e) {}
   if (!/^[A-Za-z0-9-]{10,80}$/.test(tk)) tk = '';
   if (st != null) st = st.slice(0, 40);
-  try { history.replaceState(null, '', location.pathname + '?ret=' + encodeURIComponent(ret)); } catch (e) {}
+  try { history.replaceState(null, '', location.pathname + '?ret=' + encodeURIComponent(ret)); } catch (e) {}   // 交接碼馬上從網址列拿掉
+  function setTk(v){ tk = v || ''; try { if (tk) localStorage.setItem(TK_KEY, tk); else localStorage.removeItem(TK_KEY); } catch (e) {} }
   var $ = function(id){ return document.getElementById(id); };
   function msg(t, bad){ var m=$('msg'); m.textContent=t; m.className='msg'+(bad?' bad':''); }
+  var leaving = false;
   function goBack(code){
     if (!ret) { msg(code ? '掃到：' + code + '（沒有返回網址，請回採購網站手動輸入）' : '沒有返回網址，請直接切回採購網站。', !code); return; }
-    var ps = [];
-    if (code) ps.push('scan=' + encodeURIComponent(code));
-    if (tk) ps.push('t=' + encodeURIComponent(tk));
-    if (st != null) ps.push('s=' + encodeURIComponent(st));
-    location.href = ret + (ps.length ? '?' + ps.join('&') : '');
+    if (leaving) return; leaving = true; stop();
+    msg('回到採購網站中…');
+    function nav(k){
+      var ps = [];
+      if (code) ps.push('scan=' + encodeURIComponent(code));
+      if (k) ps.push('k=' + encodeURIComponent(k));   // 一次性交接碼，回去不用重新登入
+      if (st != null) ps.push('s=' + encodeURIComponent(st));
+      location.href = ret + (ps.length ? '?' + ps.join('&') : '');
+    }
+    if (!tk) return nav('');
+    api({ api:'ticket', t:tk }, function(r){ nav(r && r.ok && r.ticket ? r.ticket : ''); }, 8000);
   }
-  $('back').onclick = function(e){ e.preventDefault(); stop(); goBack(''); };
+  // ---- 跟採購網站（Google Apps Script）溝通：先用 fetch，不行再用 JSONP ----
+  var NJ = 0;
+  function api(params, done, ms){
+    var finished = false; function end(r){ if (finished) return; finished = true; done(r || { ok:false, error:'NETWORK' }); }
+    var qs = Object.keys(params).map(function(k){ return k + '=' + encodeURIComponent(params[k]); }).join('&');
+    var t = setTimeout(function(){ end({ ok:false, error:'TIMEOUT' }); }, ms || 25000);
+    function jsonp(){
+      var name = '__scanCb' + (++NJ) + '_' + Date.now(), sc = document.createElement('script');
+      window[name] = function(r){ clearTimeout(t); cleanup(); end(r); };
+      function cleanup(){ try { delete window[name]; } catch (e) { window[name] = undefined; } if (sc.parentNode) sc.parentNode.removeChild(sc); }
+      sc.onerror = function(){ clearTimeout(t); cleanup(); end({ ok:false, error:'NETWORK' }); };
+      sc.src = ret + '?' + qs + '&callback=' + name + '&_=' + Date.now();
+      document.head.appendChild(sc);
+    }
+    if (!window.fetch) return jsonp();
+    fetch(ret + '?' + qs + '&_=' + Date.now(), { credentials:'omit', redirect:'follow', cache:'no-store' })
+      .then(function(res){ return res.text(); })
+      .then(function(txt){ var r; try { r = JSON.parse(txt); } catch (e) { r = null; } if (r && typeof r.ok === 'boolean') { clearTimeout(t); end(r); } else jsonp(); })
+      .catch(function(){ if (!finished) jsonp(); });
+  }
+  function stat(t, bad){ var e=$('stat'); if(e){ e.textContent=t; e.style.color = bad ? '#ff8a80' : ''; } }
+  $('back').onclick = function(e){ e.preventDefault(); goBack(''); };
   $('go').onclick = function(){ var c=$('code').value.replace(/\s/g,''); if(!c){ msg('請輸入條碼',true); return; } $('code').blur(); S.done=false; found(c); };
   $('code').addEventListener('keydown', function(e){ if(e.key==='Enter') $('go').click(); });
   $('retry').onclick = function(){ hideRes(); start(); };
@@ -90,16 +120,13 @@
   function loadData(done){
     if (!ret || !tk || D.loading) { if(done) done(); return; }
     D.loading = true;
-    var name = '__scanData' + (++D.n) + '_' + Date.now(), s = document.createElement('script'), t;
-    function end(r){ clearTimeout(t); D.loading=false; try{ delete window[name]; }catch(e){ window[name]=undefined; } if(s.parentNode) s.parentNode.removeChild(s);
-      if (r && r.ok && r.products) { D.list = r.products; D.at = Date.now(); }
-      else if (r && /LOGIN/.test(r.error||'')) { D.list = null; tk = ''; try{ localStorage.removeItem(TK_KEY); }catch(e){} }
-      if (done) done(r); }
-    window[name] = function(r){ end(r); };
-    t = setTimeout(function(){ end(null); }, 25000);
-    s.onerror = function(){ end(null); };
-    s.src = ret + '?api=products&t=' + encodeURIComponent(tk) + '&callback=' + name + '&_=' + Date.now();
-    document.head.appendChild(s);
+    api({ api:'products', t:tk }, function(r){
+      D.loading = false;
+      if (r && r.ok && r.products) { D.list = r.products; D.at = Date.now(); stat('✓ 已登入' + (r.user ? '（' + r.user + '）' : '') + '｜商品資料 ' + r.products.length + ' 項'); }
+      else if (r && /LOGIN/.test(r.error || '')) { D.list = null; setTk(''); stat('登入已過期，請按右上「✕ 返回」回採購網站重新登入，再按 📷。', true); }
+      else if (!D.list) stat('讀不到商品資料（' + ((r && r.error) || '網路') + '）。掃到後會回採購網站找商品。', true);
+      if (done) done(r);
+    });
   }
   // 比對規則跟採購網站一樣：先比前 13 碼（JAN／_條碼對照），再比迪士尼 9 碼商品コード
   function normCode(v){
@@ -121,6 +148,11 @@
     }
     if(!out.length) L.forEach(function(p){ var pj=normCode(p.jan); if(pj && (pj===b || (pj.length>=13 && pj.slice(0,13)===j))) add(p); });
     return { code:b, list:out };
+  }
+  function needLogin(){   // 沒登入／已登出／過期：留在這頁說明，不自動跳走
+    D.shown = null; msg('');
+    showRes('<div class="bad">需要重新登入</div><div class="sub">可能已登出或登入超過 6 小時。請回採購網站登入後，再按 📷。</div>'
+      + '<div class="row"><button class="btn" data-a="manual">回採購網站登入</button></div>');
   }
   function hideRes(){ D.shown=null; $('res').classList.add('hidden'); $('res').innerHTML=''; $('box').classList.remove('small'); }
   function showRes(html){ $('res').innerHTML=html; $('res').classList.remove('hidden'); $('box').classList.add('small'); }
@@ -154,8 +186,8 @@
     if (b.dataset.i != null && D.pick) { var p = D.pick.list[+b.dataset.i]; if(p) showOne(p, D.pick.code); return; }
     var a = b.dataset.a;
     if (a === 'cont') { hideRes(); resume(); }
-    else if (a === 'buy' && D.shown) { stop(); goBack(D.shown.code); }
-    else if (a === 'manual') { stop(); goBack(''); }
+    else if (a === 'buy' && D.shown) { goBack(D.shown.code); }
+    else if (a === 'manual') { goBack(''); }
   });
   function refreshShown(){
     if (D.list && Date.now() - D.at < 20000) return;
@@ -196,7 +228,12 @@
     if(navigator.vibrate) try{ navigator.vibrate(80); }catch(e){}
     S.last = txt; S.lastAt = Date.now();
     if (D.list) { S.paused = true; showFound(txt); refreshShown(); return; }   // 連續掃描：相機不關，直接顯示
-    stop(); msg('掃到：' + txt + '，回到採購網站中…');
+    if (D.loading) {   // 商品資料還在讀：等一下再顯示，不要離開這頁
+      S.paused = true; msg('掃到：' + txt + '，讀取商品資料中…');
+      var w = setInterval(function(){ if (D.loading) return; clearInterval(w); if (D.list) showFound(txt); else if (!tk) needLogin(); else goBack(txt); }, 300);
+      return;
+    }
+    if (!tk) { S.paused = true; needLogin(); return; }
     goBack(txt);
   }
   function resume(){   // 相機一直開著，只是重新開始辨識 → 不會再問相機權限
@@ -217,7 +254,7 @@
       if(my!==S.seq){ st.getTracks().forEach(function(t){ t.stop(); }); return; }
       S.stream=st; S.on=true; v.setAttribute('playsinline',''); v.muted=true; v.srcObject=st;
       var p=v.play(); if(p&&p.catch) p.catch(function(){});
-      if(!S.done) msg(D.list || !tk ? '把條碼對準白框（可左右轉動手機）' : '把條碼對準白框（商品資料載入中…）');
+      if(!S.done) msg('把條碼對準白框（可左右轉動手機）');
       var r=core(Z), c=document.createElement('canvas'), x=c.getContext('2d',{willReadFrequently:true}), det=detector();
       S.kick = function(){ if(S.timer){ clearTimeout(S.timer); } S.timer=setTimeout(tick,300); };
       function tick(){
@@ -274,11 +311,22 @@
     else if (S.wasOn && !S.paused) { S.wasOn = false; start(); }
   });
   start();
-  if (ret && tk) loadData(function(r){
-    if (r && r.ok) { if (S.on && !S.done) msg('把條碼對準白框（可左右轉動手機）'); }
-    else { $('note').innerHTML = '目前讀不到商品資料'+(r&&/LOGIN/.test(r.error||'')?'（登入已過期）':'')+'，掃到後會回到採購網站找商品，<b>不會自動採買</b>。'; if (S.on && !S.done) msg('把條碼對準白框（可左右轉動手機）'); }
-  });
-  else $('note').innerHTML = '掃到條碼後會回到採購網站並找到商品，<b>不會自動採買</b>。';
+  function boot(){
+    if (!ret) { $('note').innerHTML = '請從採購網站按 📷 開啟這一頁。'; return; }
+    if (kt) {   // 剛從採購網站過來：用交接碼換登入狀態（只換一次）
+      stat('登入中…');
+      var k = kt; kt = ''; D.loading = true;
+      return api({ api:'redeem', k:k }, function(r){
+        D.loading = false;
+        if (r && r.ok && r.token) setTk(r.token);
+        if (tk) loadData(); else stat('沒有登入資料，請按「✕ 返回」回採購網站登入後再按 📷。', true);
+      });
+    }
+    if (tk) { stat('讀取商品資料中…'); loadData(); }
+    else stat('沒有登入資料，請按「✕ 返回」回採購網站登入後再按 📷。', true);
+  }
+  boot();
+  window.addEventListener('pagehide', function(){ stop(); });   // 離開掃碼頁一定關相機
 })();
 </script>
 </body>
