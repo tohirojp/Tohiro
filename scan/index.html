@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>掃條碼</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{--pri:#1f5fd6;--bad:#c62828;--sub:#6b7385;--line:#e3e6ee;--chip:#eef2fb}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#111;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif;-webkit-text-size-adjust:100%}
+  .wrap{max-width:560px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 16px)}
+  .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .head h1{font-size:19px;margin:0}
+  .btn{display:block;border:0;border-radius:12px;padding:13px 14px;font-size:16px;font-weight:700;background:var(--pri);color:#fff;text-align:center;text-decoration:none;cursor:pointer;font-family:inherit}
+  .btn.ghost{background:#2a2f3a;color:#fff}
+  .btn.sm{padding:9px 12px;font-size:15px}
+  .box{position:relative;background:#000;border-radius:14px;overflow:hidden;aspect-ratio:3/4;max-height:62vh;width:100%}
+  .box video{width:100%;height:100%;object-fit:cover;display:block}
+  .aim{position:absolute;left:7%;right:7%;top:38%;height:24%;border:3px solid rgba(255,255,255,.9);border-radius:10px;box-shadow:0 0 0 999px rgba(0,0,0,.3)}
+  .msg{min-height:22px;margin:10px 0;font-size:15px;color:#cfd3dc;line-height:1.5}
+  .msg.bad{color:#ff8a80;font-weight:700}
+  .row{display:flex;gap:8px;margin-top:8px}
+  .row>*{flex:1}
+  .manual{display:flex;gap:8px;margin-top:10px}
+  .manual input{flex:1;min-width:0;padding:12px;border-radius:12px;border:1px solid #444;background:#1c1f26;color:#fff;font-size:16px}
+  .note{font-size:13px;color:#8b93a5;margin-top:12px;line-height:1.6}
+  .hidden{display:none!important}
+  #file{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head"><h1>📷 掃條碼</h1><a class="btn ghost sm" id="back" href="#">✕ 返回</a></div>
+  <div class="box" id="box"><video id="v" playsinline muted></video><div class="aim"></div></div>
+  <div class="msg" id="msg">開啟相機中…</div>
+  <div class="row"><label class="btn ghost" for="file">📸 拍照辨識</label><button class="btn ghost" id="retry">↻ 重新掃描</button></div>
+  <input type="file" id="file" accept="image/*" capture="environment">
+  <div class="manual"><input id="code" inputmode="numeric" placeholder="手動輸入條碼或商品コード"><button class="btn" id="go">查詢</button></div>
+  <div class="note">掃到條碼後會自動回到採購網站並找到商品，<b>不會自動採買</b>。<br>第一次使用請允許相機。</div>
+</div>
+<script>
+(function(){
+  // 只允許回到十浩的 Google Apps Script 網站（避免被拿去轉址到別的網站）
+  var q = new URLSearchParams(location.search), ret = q.get('ret') || '';
+  if (!/^https:\/\/script\.google\.com\/(a\/[^\/]+\/)?macros\/s\/[A-Za-z0-9_-]+\/(exec|dev)$/.test(ret)) ret = '';
+  var $ = function(id){ return document.getElementById(id); };
+  function msg(t, bad){ var m=$('msg'); m.textContent=t; m.className='msg'+(bad?' bad':''); }
+  function goBack(code){
+    if (!ret) { msg(code ? '掃到：' + code + '（沒有返回網址，請回採購網站手動輸入）' : '沒有返回網址，請直接切回採購網站。', !code); return; }
+    location.href = ret + (code ? '?scan=' + encodeURIComponent(code) : '');
+  }
+  $('back').onclick = function(e){ e.preventDefault(); stop(); goBack(''); };
+  $('go').onclick = function(){ var c=$('code').value.replace(/\s/g,''); if(!c){ msg('請輸入條碼',true); return; } stop(); goBack(c); };
+  $('code').addEventListener('keydown', function(e){ if(e.key==='Enter') $('go').click(); });
+  $('retry').onclick = start;
+
+  // ---- 條碼程式（ZXing）----
+  var ZX = ['https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js','https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js'];
+  function loadZX(){
+    if (window.ZXing) return Promise.resolve(window.ZXing);
+    var i=0;
+    return new Promise(function(res,rej){ (function next(){
+      if(i>=ZX.length){ rej(new Error('條碼程式載入失敗，請檢查網路')); return; }
+      var s=document.createElement('script'); s.src=ZX[i++]; s.onload=function(){ window.ZXing?res(window.ZXing):next(); }; s.onerror=next; document.head.appendChild(s);
+    })(); });
+  }
+  function core(Z){
+    var h=new Map(), F=Z.BarcodeFormat;
+    h.set(Z.DecodeHintType.POSSIBLE_FORMATS,[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.ITF,F.CODE_39]);
+    h.set(Z.DecodeHintType.TRY_HARDER,true);
+    var r=new Z.MultiFormatReader(); r.setHints(h); return r;
+  }
+  function dec(Z,r,c){
+    try{ return r.decodeWithState(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(c)))).getText(); }
+    catch(e){ return ''; } finally { try{ r.reset(); }catch(e){} }
+  }
+  function detector(){ try{ return window.BarcodeDetector ? new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','itf','code_39']}) : null; }catch(e){ return null; } }
+
+  // ---- 即時相機 ----
+  var S={ on:false, stream:null, timer:null, seq:0, done:false };
+  function stop(){
+    S.on=false; if(S.timer){ clearTimeout(S.timer); S.timer=null; }
+    if(S.stream){ S.stream.getTracks().forEach(function(t){ t.stop(); }); S.stream=null; }
+    var v=$('v'); try{ v.pause(); }catch(e){} v.srcObject=null;
+  }
+  function found(txt){
+    if(S.done) return; S.done=true;
+    if(navigator.vibrate) try{ navigator.vibrate(80); }catch(e){}
+    stop(); msg('掃到：' + txt + '，回到採購網站中…');
+    goBack(txt);
+  }
+  function start(){
+    stop(); S.done=false; $('box').classList.remove('hidden');
+    if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){
+      $('box').classList.add('hidden');
+      msg(inApp() ? '這個 App 內建瀏覽器不能開相機，請改用 Safari／Chrome 開啟採購網站，或按「📸 拍照辨識」。' : '這個瀏覽器不能開相機，請按「📸 拍照辨識」或手動輸入。', true); return;
+    }
+    msg('開啟相機中…');
+    var my=++S.seq;
+    Promise.all([loadZX(), navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}})]).then(function(a){
+      var Z=a[0], st=a[1], v=$('v');
+      if(my!==S.seq){ st.getTracks().forEach(function(t){ t.stop(); }); return; }
+      S.stream=st; S.on=true; v.setAttribute('playsinline',''); v.muted=true; v.srcObject=st;
+      var p=v.play(); if(p&&p.catch) p.catch(function(){});
+      msg('把條碼對準白框（可左右轉動手機）');
+      var r=core(Z), c=document.createElement('canvas'), x=c.getContext('2d',{willReadFrequently:true}), det=detector();
+      (function tick(){
+        if(!S.on||S.done||my!==S.seq) return;
+        var next=function(){ if(S.on&&!S.done&&my===S.seq) S.timer=setTimeout(tick,180); };
+        if(!v.videoWidth) return next();
+        if(c.width!==v.videoWidth){ c.width=v.videoWidth; c.height=v.videoHeight; }
+        x.drawImage(v,0,0,c.width,c.height);
+        var fin=function(t){ if(t) found(t); else next(); };
+        if(det) det.detect(c).then(function(res){ fin(res&&res[0]?res[0].rawValue:dec(Z,r,c)); }).catch(function(){ fin(dec(Z,r,c)); });
+        else fin(dec(Z,r,c));
+      })();
+    }).catch(function(e){
+      if(my!==S.seq) return;
+      stop(); $('box').classList.add('hidden');
+      var n=(e&&e.name)||'';
+      if(n==='NotAllowedError'||n==='SecurityError') msg(inApp() ? '這個 App 內建瀏覽器擋住相機。請改用 Safari 開啟採購網站，或按「📸 拍照辨識」。' : '相機權限被拒。請到「設定 → Safari → 相機」改成允許，再按「↻ 重新掃描」；或按「📸 拍照辨識」。', true);
+      else if(n==='NotFoundError'||n==='OverconstrainedError') msg('找不到相機，請按「📸 拍照辨識」或手動輸入。', true);
+      else if(n==='NotReadableError') msg('相機被其他 App 使用中，關掉其他 App 後按「↻ 重新掃描」。', true);
+      else msg('無法開啟相機（'+((e&&e.message)||n)+'）。請按「📸 拍照辨識」或手動輸入。', true);
+    });
+  }
+  function inApp(){ return /Instagram|FBAN|FBAV|FB_IAB|FBIOS|Line\/|KAKAOTALK|MicroMessenger|GSA\/|Threads|Barcelona/i.test(navigator.userAgent); }
+
+  // ---- 拍照辨識（備用）----
+  $('file').addEventListener('click', function(){ stop(); try{ this.value=''; }catch(e){} });
+  $('file').onchange = function(){
+    var f=this.files&&this.files[0]; if(!f) return;
+    msg('辨識照片中…（約 1～3 秒）');
+    loadZX().then(function(Z){ return new Promise(function(res,rej){
+      var img=new Image(), url=URL.createObjectURL(f);
+      img.onload=function(){
+        var r=core(Z), W=img.naturalWidth, H=img.naturalHeight, txt='', jobs=[];
+        [1600,1200,2400,900].forEach(function(sz){ [0,90].forEach(function(rot){ [[0,1],[0.3,0.4],[0.1,0.4],[0.5,0.4],[0.2,0.6]].forEach(function(b){ jobs.push([sz,rot,b]); }); }); });
+        for(var i=0;i<jobs.length&&!txt;i++){
+          var sz=jobs[i][0], rot=jobs[i][1], b=jobs[i][2];
+          var k=Math.min(1,sz/Math.max(W,H)), w=Math.round(W*k), h=Math.round(H*k), rw=rot?h:w, rh=rot?w:h;
+          var y0=Math.round(rh*b[0]), bh=Math.max(40,Math.round(rh*b[1]));
+          var c=document.createElement('canvas'), x=c.getContext('2d'); c.width=rw; c.height=Math.min(bh,rh-y0);
+          x.translate(0,-y0); if(rot){ x.translate(rw,0); x.rotate(Math.PI/2); } x.drawImage(img,0,0,w,h);
+          txt=dec(Z,r,c);
+        }
+        URL.revokeObjectURL(url); txt?res(txt):rej(new Error('NOT_FOUND'));
+      };
+      img.onerror=function(){ URL.revokeObjectURL(url); rej(new Error('照片讀取失敗，請再拍一次')); };
+      img.src=url;
+    }); }).then(found).catch(function(e){
+      msg(e.message==='NOT_FOUND'?'照片裡讀不到條碼。請靠近一點、讓條碼橫放填滿畫面、避免反光再拍一次。':e.message, true);
+    });
+  };
+  document.addEventListener('visibilitychange', function(){ if(document.hidden) stop(); });
+  start();
+})();
+</script>
+</body>
+</html>
