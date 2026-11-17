@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>十浩台灣倉 WMS（測試版）</title>
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--ink:#1d2433;--sub:#667085;--line:#e3e7ee;--blue:#1d6fe8;--green:#12a150;--red:#d92d20;--amber:#f59e0b;--pick:#7c3aed}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;-webkit-text-size-adjust:100%}
+header{position:sticky;top:0;z-index:5;background:#14213d;color:#fff;padding:10px 14px calc(10px);display:flex;align-items:center;gap:8px}
+header h1{font-size:17px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header button{background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:8px;padding:7px 10px;font-size:14px}
+main{padding:12px 14px 90px;max-width:760px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 10px}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{min-width:0}
+.grow{flex:1}
+.btn{border:0;border-radius:10px;background:var(--blue);color:#fff;font-size:16px;font-weight:600;padding:12px 14px;min-height:46px;cursor:pointer}
+.btn.ghost{background:#eef3fd;color:var(--blue)}
+.btn.red{background:var(--red)}.btn.green{background:var(--green)}.btn.gray{background:#e5e7eb;color:#344054}
+.btn.sm{min-height:36px;padding:7px 11px;font-size:14px}
+.btn:disabled{opacity:.5}
+.block{display:block;width:100%}
+input,select,textarea{font:inherit;border:1px solid #cfd5df;border-radius:10px;padding:11px 12px;width:100%;background:#fff;min-height:46px}
+label.l{display:block;font-size:13px;color:var(--sub);margin:8px 0 4px}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:left;font-size:16px;font-weight:700;color:var(--ink);min-height:84px}
+.tile small{display:block;font-weight:400;color:var(--sub);font-size:13px;margin-top:4px}
+.stat{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;text-align:center}
+.stat div{background:#f6f8fb;border-radius:8px;padding:6px 2px;font-size:12px;color:var(--sub)}
+.stat b{display:block;font-size:18px;color:var(--ink)}
+.meta{font-size:13px;color:var(--sub)}
+.pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600;background:#eef3fd;color:var(--blue)}
+.pill.b{background:#f3e8ff;color:var(--pick)}.pill.g{background:#e7f6ec;color:var(--green)}.pill.r{background:#fdecea;color:var(--red)}.pill.a{background:#fff4e0;color:#b45309}
+.scanbar{position:sticky;top:52px;z-index:4;background:var(--bg);padding:6px 0 8px}
+.scanbar input{font-size:18px}
+.camBtn{background:var(--blue);color:#fff;border:0;border-radius:10px;min-width:62px;min-height:46px;font-size:22px}
+.camBtn.on{background:var(--red)}
+#cam{display:none;position:relative;background:#000;border-radius:12px;overflow:hidden;margin-top:8px;aspect-ratio:4/3;max-height:42vh;width:100%}
+#cam.on{display:block}
+#cam video{width:100%;height:100%;object-fit:cover}
+#cam .aim{position:absolute;left:8%;right:8%;top:38%;height:24%;border:3px solid rgba(255,255,255,.85);border-radius:10px}
+#cam .hint{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);color:#fff;font-size:13px;padding:5px 8px;text-align:center}
+.flash{border-radius:12px;padding:12px;margin:8px 0;font-weight:600}
+.flash.ok{background:#e7f6ec;color:#0b6b35;border:2px solid var(--green)}
+.flash.bad{background:#fdecea;color:#a61b11;border:2px solid var(--red)}
+.flash.warn{background:#fff4e0;color:#8a4b04;border:2px solid var(--amber)}
+.prod{display:flex;gap:10px;align-items:center}
+.prod img{width:64px;height:64px;object-fit:cover;border-radius:8px;background:#eee;flex:none}
+.prod .n{font-weight:700}
+.big{font-size:28px;font-weight:800}
+.item{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.item img{width:48px;height:48px;object-fit:cover;border-radius:6px;background:#eee;flex:none}
+.item .q{font-weight:800;font-size:18px;white-space:nowrap}
+.item.done{opacity:.55}
+.item.hit{background:#e7f6ec;border-radius:8px}
+.bar{height:8px;background:#e5e7eb;border-radius:9px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--green)}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px}
+.tabs button{flex:none;border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 13px;font-size:14px}
+.tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.mask{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:760px;max-height:88vh;overflow:auto;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+.sheet h3{margin:0 0 8px}
+.toggle{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.toggle button{flex:1;border:0;background:#fff;padding:10px;font-size:15px}
+.toggle button.on{background:var(--ink);color:#fff}
+.toggle button.on.red{background:var(--red)}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#111827;color:#fff;padding:10px 16px;border-radius:10px;font-size:15px;z-index:30;display:none;max-width:92vw}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:6px 4px;border-top:1px solid var(--line);text-align:left;vertical-align:top}
+.hidden{display:none!important}
+.err{color:var(--red);font-size:14px;margin-top:6px}
+.queue{font-size:12px;color:var(--sub);text-align:right}
+</style>
+</head>
+<body>
+<header><h1 id="ttl">十浩台灣倉 WMS（測試版）</h1><button id="hdrBack" class="hidden">← 返回</button><button id="hdrOut" class="hidden">登出</button></header>
+<main id="app"></main>
+<div id="modal"></div>
+<div id="toast"></div>
+<script>
+(function(){
+'use strict';
+// ====== 設定 ======
+// 後端網址（Apps Script 部署後的 /exec 網址）。空白時第一次開啟會請你貼上。
+var DEFAULT_API = '';
+var LS = { api:'wms_api', tok:'wms_tok', user:'wms_user', batch:'wms_batch', carrier:'wms_carrier' };
+function lsGet(k){ try{ return localStorage.getItem(k)||''; }catch(e){ return ''; } }
+function lsSet(k,v){ try{ if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v); }catch(e){} }
+
+var st = { api: lsGet(LS.api)||DEFAULT_API, token: lsGet(LS.tok), user: null, view: 'home', stack: [] };
+try{ st.user = JSON.parse(lsGet(LS.user)||'null'); }catch(e){}
+(function(){   // ?api=… 可直接帶入網址（只接受 Apps Script 網址）
+  var m = location.search.match(/[?&]api=([^&]+)/);
+  if(m){ var u=decodeURIComponent(m[1]); if(/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(u)){ st.api=u; lsSet(LS.api,u); } history.replaceState(null,'',location.pathname); }
+})();
+
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function rid(){ var a=new Uint8Array(12); (window.crypto||window.msCrypto).getRandomValues(a); return Array.prototype.map.call(a,function(b){ return ('0'+b.toString(16)).slice(-2); }).join(''); }
+function toast(t){ var e=$('toast'); e.textContent=t; e.style.display='block'; clearTimeout(toast.t); toast.t=setTimeout(function(){ e.style.display='none'; },2200); }
+function has(role){ return st.user && (st.user.roles.indexOf('管理員')>=0 || st.user.roles.indexOf(role)>=0); }
+function img(u){ return u ? '<img src="'+esc(u)+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility=\'hidden\'">' : '<img alt="">'; }
+
+// ====== 聲音／震動 ======
+var actx=null;
+function beep(ok){
+  try{ if(navigator.vibrate) navigator.vibrate(ok?60:[120,60,120]); }catch(e){}
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    var o=actx.createOscillator(), g=actx.createGain();
+    o.frequency.value = ok?1320:220; o.type = ok?'sine':'square';
+    g.gain.value=0.12; o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+(ok?0.09:0.35));
+  }catch(e){}
+}
+
+// ====== 呼叫後端 ======
+function api(action, args){
+  if(!st.api) return Promise.reject(new Error('尚未設定系統網址'));
+  var body = JSON.stringify({ action:action, args:args||{}, token:st.token });
+  return fetch(st.api, { method:'POST', body:body, headers:{ 'Content-Type':'text/plain;charset=utf-8' }, redirect:'follow' })
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .catch(function(){ return jsonp(body); })
+    .then(function(res){
+      if(!res) throw new Error('伺服器沒有回應');
+      if(!res.ok){
+        if(res.login){ logoutLocal(); render(); }
+        throw new Error(res.login?'請重新登入':res.error);
+      }
+      return res.data;
+    });
+}
+function jsonp(body){
+  return new Promise(function(resolve,reject){
+    var cb='cb'+rid().slice(0,10), s=document.createElement('script'), done=false;
+    window[cb]=function(d){ done=true; resolve(d); cleanup(); };
+    function cleanup(){ try{ delete window[cb]; }catch(e){ window[cb]=undefined; } if(s.parentNode) s.parentNode.removeChild(s); }
+    s.src = st.api+'?cb='+cb+'&p='+encodeURIComponent(body);
+    s.onerror=function(){ if(!done){ cleanup(); reject(new Error('連不到伺服器，請檢查網路')); } };
+    setTimeout(function(){ if(!done){ cleanup(); reject(new Error('伺服器太久沒回應，請再試一次')); } }, 30000);
+    document.head.appendChild(s);
+  });
+}
+
+// 掃碼佇列：一筆一筆送，每筆帶自己的請求編號；網路斷了重送也只算一次
+var q = { list:[], busy:false };
+function enqueue(job){ q.list.push(job); showQueue(); pump(); }
+function showQueue(){ var e=$('qInfo'); if(e) e.textContent = q.list.length ? ('處理中 '+q.list.length+' 筆…') : ''; }
+function pump(){
+  if(q.busy || !q.list.length) return;
+  q.busy=true;
+  var job=q.list[0];
+  api(job.action, job.args).then(function(d){
+    q.list.shift(); q.busy=false; showQueue(); job.ok(d); pump();
+  }).catch(function(e){
+    var net = /網路|回應|HTTP|Failed|fetch/i.test(e.message);
+    if(net && (job.tries=(job.tries||0)+1) < 4){ q.busy=false; setTimeout(pump, 1500*job.tries); return; }
+    q.list.shift(); q.busy=false; showQueue(); job.fail(e); pump();
+  });
+}
+
+// ====== 相機掃碼（連續） ======
+var ZX_URLS=['https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js','https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js'];
+var cam={ on:false, stream:null, timer:null, seq:0, last:'', lastAt:0, needClear:false, onCode:null };
+function loadZX(){
+  if(window.ZXing) return Promise.resolve(window.ZXing);
+  var i=0;
+  return new Promise(function(resolve,reject){
+    (function next(){
+      if(i>=ZX_URLS.length){ reject(new Error('條碼程式載入失敗')); return; }
+      var s=document.createElement('script'); s.src=ZX_URLS[i++]; s.async=true;
+      s.onload=function(){ window.ZXing?resolve(window.ZXing):next(); }; s.onerror=next; document.head.appendChild(s);
+    })();
+  });
+}
+function zxCore(Z){ var h=new Map(), F=Z.BarcodeFormat;
+  h.set(Z.DecodeHintType.POSSIBLE_FORMATS,[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.ITF,F.CODE_39,F.QR_CODE]);
+  h.set(Z.DecodeHintType.TRY_HARDER,true); var r=new Z.MultiFormatReader(); r.setHints(h); return r; }
+function zxRead(Z,core,c){ try{ return core.decodeWithState(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(c)))).getText(); }catch(e){ return ''; } finally{ try{ core.reset(); }catch(e){} } }
+function camHint(t){ var h=$('camHint'); if(h) h.textContent=t; }
+function stopCam(){
+  cam.on=false; cam.seq++;
+  if(cam.timer){ clearTimeout(cam.timer); cam.timer=null; }
+  if(cam.stream){ try{ cam.stream.getTracks().forEach(function(t){ t.stop(); }); }catch(e){} cam.stream=null; }
+  var box=$('cam'); if(box) box.classList.remove('on');
+  var b=$('camBtn'); if(b){ b.classList.remove('on'); b.textContent='📷'; }
+}
+function toggleCam(){ if(cam.on) stopCam(); else startCam(); }
+function startCam(){
+  var box=$('cam'), v=$('camVideo'); if(!box||!v) return;
+  if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){ flash('bad','這個瀏覽器不能開相機，請用掃碼槍或手動輸入條碼。'); return; }
+  box.classList.add('on'); var b=$('camBtn'); if(b){ b.classList.add('on'); b.textContent='■'; }
+  camHint('開啟相機中…');
+  var my=++cam.seq; cam.on=true; cam.needClear=false;
+  Promise.all([loadZX(), navigator.mediaDevices.getUserMedia({ audio:false, video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1080 } } })]).then(function(a){
+    var Z=a[0], stream=a[1];
+    if(my!==cam.seq){ stream.getTracks().forEach(function(t){ t.stop(); }); return; }
+    cam.stream=stream; v.setAttribute('playsinline',''); v.muted=true; v.srcObject=stream; var p=v.play(); if(p&&p.catch) p.catch(function(){});
+    camHint('對準條碼，聽到「嗶」就算一件；同一件要移開再掃');
+    var core=zxCore(Z), c=document.createElement('canvas'), ctx=c.getContext('2d',{ willReadFrequently:true }), det=null;
+    try{ if(window.BarcodeDetector) det=new BarcodeDetector({ formats:['ean_13','ean_8','upc_a','upc_e','code_128','itf','code_39','qr_code'] }); }catch(e){ det=null; }
+    (function tick(){
+      if(!cam.on || my!==cam.seq) return;
+      var next=function(){ if(cam.on && my===cam.seq) cam.timer=setTimeout(tick,150); };
+      if(!v.videoWidth) return next();
+      if(c.width!==v.videoWidth){ c.width=v.videoWidth; c.height=v.videoHeight; }
+      ctx.drawImage(v,0,0,c.width,c.height);
+      var got=function(txt){
+        txt=String(txt||'').trim();
+        var now=Date.now();
+        if(!txt){ if(cam.needClear && now-cam.lastAt>400) cam.needClear=false; return next(); }
+        // 同一個條碼還在畫面裡 → 不重複計算，要先移開
+        if(cam.needClear && txt===cam.last){ cam.lastAt=now; return next(); }
+        if(now-cam.lastAt<700 && txt===cam.last) return next();
+        cam.last=txt; cam.lastAt=now; cam.needClear=true;
+        if(cam.onCode) cam.onCode(txt);
+        next();
+      };
+      if(det) det.detect(c).then(function(r){ got(r&&r[0]?r[0].rawValue:zxRead(Z,core,c)); }).catch(function(){ got(zxRead(Z,core,c)); });
+      else got(zxRead(Z,core,c));
+    })();
+  }).catch(function(e){
+    if(my!==cam.seq) return;
+    stopCam();
+    var n=(e&&e.name)||'';
+    if(n==='NotAllowedError'||n==='SecurityError') flash('bad','相機權限被拒絕。iPhone：設定 → Safari → 相機 → 允許；或 Safari 網址列「大小」→ 網站設定 → 相機 → 允許。也可以用掃碼槍或手動輸入。');
+    else if(n==='NotFoundError') flash('bad','找不到相機，請用掃碼槍或手動輸入。');
+    else if(n==='NotReadableError') flash('bad','相機被其他 App 使用中，請關掉其他 App 再按 📷。');
+    else flash('bad','無法開啟相機：'+((e&&e.message)||n));
+  });
+}
+
+// 掃碼列（相機＋掃碼槍／手動輸入）
+function scanBar(ph, extra){
+  return '<div class="scanbar"><div class="row"><input id="code" class="grow" placeholder="'+esc(ph||'掃碼槍或輸入條碼，按 Enter')+'" autocomplete="off" autocapitalize="off" enterkeyhint="go">'
+    + '<button class="camBtn" id="camBtn" title="相機掃碼">📷</button></div>'
+    + (extra||'')
+    + '<div id="cam"><video id="camVideo" playsinline muted></video><div class="aim"></div><div class="hint" id="camHint"></div></div>'
+    + '<div class="queue" id="qInfo"></div><div id="flash"></div></div>';
+}
+function bindScan(onCode){
+  cam.onCode=onCode;
+  var inp=$('code');
+  $('camBtn').onclick=toggleCam;
+  inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); var v=inp.value.trim(); inp.value=''; if(v) onCode(v); } });
+}
+function flash(kind, html){ var f=$('flash'); if(f) f.innerHTML='<div class="flash '+kind+'">'+html+'</div>'; }
+function busy(btn, p){ if(btn){ btn.disabled=true; } return p.then(function(x){ if(btn) btn.disabled=false; return x; },function(e){ if(btn) btn.disabled=false; throw e; }); }
+
+// ====== 畫面切換 ======
+function go(view, arg){ stopCam(); st.stack.push({ view:st.view, arg:st.arg }); st.view=view; st.arg=arg; render(); window.scrollTo(0,0); }
+function back(){ stopCam(); var p=st.stack.pop()||{ view:'home' }; st.view=p.view; st.arg=p.arg; render(); }
+function logoutLocal(){ st.token=''; st.user=null; lsSet(LS.tok,null); lsSet(LS.user,null); }
+$('hdrBack').onclick=back;
+$('hdrOut').onclick=function(){ api('logout',{}).catch(function(){}); logoutLocal(); stopCam(); st.view='home'; st.stack=[]; render(); };
+function setHeader(t){ $('ttl').textContent=t; $('hdrBack').classList.toggle('hidden', st.view==='home' || !st.user); $('hdrOut').classList.toggle('hidden', !st.user || st.view!=='home'); }
+
+function render(){
+  closeModal();
+  if(!st.api) return viewSetup();
+  if(!st.token || !st.user) return viewLogin();
+  var V={ home:viewHome, receive:viewReceive, picks:viewPicks, pick:viewPick, packs:viewPacks, pack:viewPack, ship:viewShip,
+    search:viewSearch, admin:viewAdmin, cust:viewCust, alloc:viewAlloc, exc:viewExc, adjust:viewAdjust, allPicks:viewAllPicks };
+  (V[st.view]||viewHome)(st.arg);
+}
+var app=$('app');
+
+// ====== 設定網址 ======
+function viewSetup(){
+  setHeader('十浩台灣倉 WMS（測試版）');
+  app.innerHTML='<div class="card"><h3 style="margin-top:0">第一次使用：設定系統網址</h3><p class="meta">請貼上 Apps Script「網頁應用程式」網址（https://script.google.com/macros/s/…/exec）。只要設定一次。</p>'
+    +'<input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec"><div class="err" id="err"></div><button class="btn block" style="margin-top:10px" id="save">儲存</button></div>';
+  $('save').onclick=function(){
+    var u=$('apiUrl').value.trim();
+    if(!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(u)){ $('err').textContent='網址格式不對，要以 /exec 結尾'; return; }
+    st.api=u; lsSet(LS.api,u); render();
+  };
+}
+
+// ====== 登入 ======
+function viewLogin(){
+  setHeader('十浩台灣倉 WMS（測試版）');
+  app.innerHTML='<div class="card"><h3 style="margin-top:0">登入</h3><label class="l">帳號</label><input id="acc" autocapitalize="off" autocomplete="username">'
+    +'<label class="l">PIN</label><input id="pin" type="password" inputmode="numeric" autocomplete="current-password"><div class="err" id="err"></div>'
+    +'<button class="btn block" style="margin-top:12px" id="go">登入</button></div><p class="meta" style="text-align:center"><a href="#" id="chg">更改系統網址</a></p>';
+  $('pin').addEventListener('keydown',function(e){ if(e.key==='Enter') $('go').click(); });
+  $('chg').onclick=function(e){ e.preventDefault(); st.api=''; lsSet(LS.api,null); render(); };
+  $('go').onclick=function(){
+    $('err').textContent='';
+    busy($('go'), api('login',{ account:$('acc').value, pin:$('pin').value })).then(function(d){
+      st.token=d.token; st.user=d.user; lsSet(LS.tok,d.token); lsSet(LS.user,JSON.stringify(d.user)); st.view='home'; render();
+    }).catch(function(e){ $('err').textContent=e.message; });
+  };
+}
+
+// ====== 首頁 ======
+function viewHome(){
+  setHeader('台灣倉｜'+(st.user.name||st.user.account));
+  var t=[];
+  if(has('收貨')) t.push(['receive','📦 理貨入庫','逐件掃碼，數量進入可配貨']);
+  if(has('揀貨')) t.push(['picks','🧺 揀貨','依揀貨單掃碼揀貨']);
+  if(has('包裝')) t.push(['packs','📮 包裝覆核','掃碼裝箱，可分多箱']);
+  if(has('出貨')) t.push(['ship','🚚 出貨交運','填物流、確認交運']);
+  t.push(['search','🔎 庫存查詢','掃碼或搜尋品名']);
+  if(has('管理員')) t.push(['admin','⚙️ 管理','同步訂單、配貨模式、產生揀貨單、異常']);
+  app.innerHTML='<div class="card" id="dash"><div class="meta">載入中…</div></div><div class="tiles">'
+    + t.map(function(x){ return '<button class="tile" data-v="'+x[0]+'">'+x[1]+'<small>'+x[2]+'</small></button>'; }).join('') + '</div>';
+  Array.prototype.forEach.call(app.querySelectorAll('.tile'),function(b){ b.onclick=function(){ go(b.getAttribute('data-v')); }; });
+  api('dashboard',{}).then(function(d){
+    st.user=d.user; lsSet(LS.user,JSON.stringify(d.user));
+    var p=d.pick||{};
+    $('dash').innerHTML='<div class="stat">'+['可配貨','已預留','已揀貨','已出貨','異常'].map(function(k){ return '<div><b>'+(d.stock[k]||0)+'</b>'+k+'</div>'; }).join('')+'</div>'
+      +'<div class="meta" style="margin-top:8px">待揀 '+(p['待揀']||0)+'・揀貨中 '+(p['揀貨中']||0)+'・待包裝 '+((p['已揀完']||0)+(p['包裝中']||0))+'・待交運箱 '+d.sealedBoxes+(d.exceptions?'・<b style="color:#d92d20">異常 '+d.exceptions+'</b>':'')+'</div>';
+  }).catch(function(e){ $('dash').innerHTML='<div class="err">'+esc(e.message)+'</div>'; });
+}
+
+// ====== 選商品（同一條碼對到多個商品） ======
+function choose(list, cb){
+  $('modal').innerHTML='<div class="mask" id="mk"><div class="sheet"><h3>這個條碼對到多個商品，請選一個</h3>'
+    + list.map(function(p,i){ return '<div class="item" data-i="'+i+'" style="cursor:pointer">'+img(p.img)+'<div class="grow"><div class="n">'+esc(p.name)+'</div><div class="meta">'+esc(p.store)+'・'+esc(p.spec||'')+'・'+esc(p.id)+'</div></div></div>'; }).join('')
+    + '<button class="btn gray block" id="mc" style="margin-top:10px">取消</button></div></div>';
+  $('mc').onclick=closeModal;
+  Array.prototype.forEach.call($('modal').querySelectorAll('.item'),function(el){ el.onclick=function(){ var p=list[+el.getAttribute('data-i')]; closeModal(); cb(p); }; });
+}
+function closeModal(){ var m=$('modal'); if(m) m.innerHTML=''; }
+function prodCard(p, right){ return '<div class="prod">'+img(p.img)+'<div class="grow"><div class="n">'+esc(p.name)+'</div><div class="meta">'+esc(p.store||'')+(p.spec?'・'+esc(p.spec):'')+'</div></div>'+(right||'')+'</div>'; }
+
+// ====== 理貨入庫 ======
+function viewReceive(){
+  setHeader('📦 理貨入庫');
+  var undo=false;
+  app.innerHTML='<div class="card"><label class="l" style="margin-top:0">到貨批次（同一批貨用同一個名稱）</label><input id="batch" placeholder="例如 1120 到貨" value="'+esc(lsGet(LS.batch))+'"></div>'
+    + scanBar('掃商品條碼（掃碼槍／輸入後按 Enter）',
+      '<div class="row" style="margin-top:8px"><div class="toggle grow"><button id="mIn" class="on">＋ 入庫</button><button id="mUndo">－ 退掃</button></div>'
+      +'<div style="width:96px"><input id="qty" type="number" inputmode="numeric" min="1" value="1" title="一次幾件"></div></div>')
+    + '<div class="card" id="sum"><div class="meta">本批明細載入中…</div></div>';
+  $('batch').onchange=function(){ lsSet(LS.batch,$('batch').value.trim()); loadSum(); };
+  $('mIn').onclick=function(){ undo=false; $('mIn').className='on'; $('mUndo').className=''; };
+  $('mUndo').onclick=function(){ undo=true; $('mUndo').className='on red'; $('mIn').className=''; };
+  function send(code, productId){
+    var batch=$('batch').value.trim();
+    if(!batch){ beep(false); flash('bad','請先輸入到貨批次名稱'); $('batch').focus(); return; }
+    lsSet(LS.batch,batch);
+    var qty=Math.max(1,parseInt($('qty').value,10)||1);
+    var isUndo=undo;
+    enqueue({ action:'receiveScan', args:{ batch:batch, code:code, productId:productId||'', qty:qty, undo:isUndo, reqId:rid() },
+      ok:function(d){
+        if(d.choose){ beep(false); choose(d.choose,function(p){ send(code,p.id); }); return; }
+        if(d.notFound){ beep(false); flash('bad','查無對應商品：'+esc(d.code)+'<br><span style="font-weight:400">沒有入庫，已記到「異常」。可以請管理員對應條碼，或手動輸入商品ID。</span>'); return; }
+        beep(true);
+        var dm=d.demand||{};
+        flash(isUndo?'warn':'ok', prodCard(d.product,'<div style="text-align:right"><div class="big">'+(isUndo?'−':'+')+qty+'</div><div class="meta">本批 '+d.inBatch+' 件</div></div>')
+          +'<div class="meta" style="margin-top:6px;color:inherit">可配貨 '+d.stock['可配貨']+'・訂單需求 '+dm.need+'・還沒配貨 '+dm.waiting+(dm.need===0?'・<b>沒有訂單（溢採）</b>':'')+'</div>');
+        if($('qty')) $('qty').value=1;
+        loadSum.later();
+      },
+      fail:function(e){ beep(false); flash('bad',esc(e.message)); } });
+  }
+  bindScan(function(c){ send(c); });
+  function loadSum(){
+    var b=$('batch').value.trim();
+    if(!b){ $('sum').innerHTML='<div class="meta">輸入批次名稱後開始掃碼</div>'; return; }
+    api('receiveSummary',{ batch:b }).then(function(d){
+      if(!$('sum')) return;
+      $('sum').innerHTML='<div class="row"><b class="grow">本批「'+esc(b)+'」共 '+d.total+' 件・'+d.items.length+' 品項</b></div>'
+        + (d.items.length? d.items.map(function(x){ return '<div class="item">'+img(x.product.img)+'<div class="grow"><div>'+esc(x.product.name)+'</div><div class="meta">'+esc(x.product.store||'')+'</div></div><div class="q">'+x.qty+'</div></div>'; }).join('') : '<div class="meta">還沒有掃描</div>')
+        + (d.batches.length>1?'<div class="meta" style="margin-top:6px">其他批次：'+d.batches.filter(function(x){ return x!==b; }).map(esc).join('、')+'</div>':'');
+    }).catch(function(){});
+  }
+  loadSum.later=function(){ clearTimeout(loadSum.t); loadSum.t=setTimeout(loadSum,1200); };
+  loadSum();
+}
+
+// ====== 揀貨 ======
+function pickRow(p, sub){
+  var pct=p.need?Math.round(100*(sub==='pack'?p.packed:p.picked)/p.need):0;
+  return '<div class="card" data-id="'+esc(p.id)+'" style="cursor:pointer"><div class="row"><span class="pill '+(p.type==='整批'?'b':'')+'">'+esc(p.type)+'</span><b class="grow">'+esc(p.customer)+'</b><span class="pill '+(/已/.test(p.status)?'g':'a')+'">'+esc(p.status)+'</span></div>'
+    +'<div class="meta">'+(p.orderNo&&p.type==='個別'?esc(p.orderNo)+'・'+esc(p.consumer)+'・':'')+p.items+' 品項・'+(sub==='pack'?'已裝 '+p.packed+'／已揀 '+p.picked:'已揀 '+p.picked+'／'+p.need)+(p.claimBy?'・'+esc(p.claimBy)+' 處理中':'')+'</div>'
+    +'<div class="bar"><i style="width:'+pct+'%"></i></div></div>';
+}
+function viewPicks(){
+  setHeader('🧺 揀貨單');
+  app.innerHTML='<div class="meta" style="margin-bottom:8px">點一張揀貨單開始揀貨。</div><div id="lst"><div class="meta">載入中…</div></div>';
+  api('pickLists',{ filter:'open' }).then(function(d){
+    $('lst').innerHTML = d.list.length ? d.list.map(function(p){ return pickRow(p); }).join('') : '<div class="card meta">目前沒有待揀的揀貨單。請管理員到「管理 → 產生揀貨單」。</div>';
+    Array.prototype.forEach.call($('lst').querySelectorAll('[data-id]'),function(el){ el.onclick=function(){ go('pick', el.getAttribute('data-id')); }; });
+  }).catch(function(e){ $('lst').innerHTML='<div class="err">'+esc(e.message)+'</div>'; });
+}
+function viewPick(id){
+  setHeader('🧺 揀貨');
+  var undo=false, data=null;
+  app.innerHTML='<div class="card" id="hd"><div class="meta">載入中…</div></div>'
+    + scanBar('掃商品條碼', '<div class="row" style="margin-top:8px"><div class="toggle grow"><button id="mIn" class="on">＋ 揀貨</button><button id="mUndo">－ 退回</button></div><div style="width:96px"><input id="qty" type="number" inputmode="numeric" min="1" value="1"></div></div>')
+    + '<div class="card" id="items"></div>';
+  $('mIn').onclick=function(){ undo=false; $('mIn').className='on'; $('mUndo').className=''; };
+  $('mUndo').onclick=function(){ undo=true; $('mUndo').className='on red'; $('mIn').className=''; };
+  function load(hit){
+    api('pickDetail',{ id:id }).then(function(d){
+      data=d; if(!$('hd')) return;
+      var p=d.pick;
+      $('hd').innerHTML='<div class="row"><span class="pill '+(p.type==='整批'?'b':'')+'">'+esc(p.type)+'</span><b class="grow">'+esc(p.customer)+'</b><span class="pill">'+esc(p.status)+'</span></div>'
+        +(p.type==='個別'?'<div class="meta">'+esc(p.orderNo)+'・'+esc(p.consumer)+'</div>':'')
+        +'<div class="meta">已揀 '+d.picked+'／'+d.need+'</div><div class="bar"><i style="width:'+(d.need?Math.round(100*d.picked/d.need):0)+'%"></i></div>';
+      $('items').innerHTML=d.items.map(function(it){
+        var done=it.picked>=it.need;
+        return '<div class="item'+(done?' done':'')+(hit===it.pid?' hit':'')+'">'+img(it.product.img)+'<div class="grow"><div>'+esc(it.product.name)+'</div><div class="meta">'+esc(it.product.store||'')+(it.product.spec?'・'+esc(it.product.spec):'')+'</div>'
+          +(done?'':'<button class="btn ghost sm" data-short="'+esc(it.pid)+'" data-left="'+(it.need-it.picked)+'" style="margin-top:4px">回報缺貨</button>')+'</div><div class="q">'+it.picked+'／'+it.need+'</div></div>';
+      }).join('') || '<div class="meta">沒有品項</div>';
+      Array.prototype.forEach.call($('items').querySelectorAll('[data-short]'),function(b){ b.onclick=function(){ shortDlg(b.getAttribute('data-short'), +b.getAttribute('data-left')); }; });
+    }).catch(function(e){ $('hd').innerHTML='<div class="err">'+esc(e.message)+'</div>'; });
+  }
+  function shortDlg(pid, left){
+    var it=data.items.filter(function(x){ return x.pid===pid; })[0];
+    $('modal').innerHTML='<div class="mask"><div class="sheet"><h3>回報缺貨</h3>'+prodCard(it.product)+'<label class="l">找不到幾件？（最多 '+left+'）</label><input id="sq" type="number" inputmode="numeric" value="'+left+'">'
+      +'<label class="l">說明</label><input id="sn" placeholder="例如：貨架上沒有"><div class="err" id="se"></div><div class="row" style="margin-top:10px"><button class="btn gray grow" id="sc">取消</button><button class="btn red grow" id="so">送出</button></div></div></div>';
+    $('sc').onclick=closeModal;
+    var r=rid();
+    $('so').onclick=function(){ busy($('so'), api('pickShort',{ id:id, productId:pid, qty:+$('sq').value, note:$('sn').value, reqId:r })).then(function(){ closeModal(); toast('已回報，管理員會處理'); load(); }).catch(function(e){ $('se').textContent=e.message; }); };
+  }
+  function send(code, productId){
+    var qty=Math.max(1,parseInt($('qty').value,10)||1), u=undo;
+    enqueue({ action:'pickScan', args:{ id:id, code:code, productId:productId||'', qty:qty, undo:u, reqId:rid() },
+      ok:function(d){
+        if(d.choose){ beep(false); choose(d.choose,function(p){ send(code,p.id); }); return; }
+        if(d.wrong){ beep(false); flash('bad','不在這張揀貨單：'+(d.product?esc(d.product.name):esc(d.code||''))+'<br><span style="font-weight:400">請放回，不要拿錯。</span>'); return; }
+        beep(true);
+        flash(u?'warn':'ok', prodCard(d.product,'<div style="text-align:right"><div class="big">'+d.item.picked+'／'+d.item.need+'</div></div>')+(d.picked>=d.need?'<div style="margin-top:6px">🎉 這張揀貨單已全部揀完，可以交給包裝。</div>':''));
+        if($('qty')) $('qty').value=1;
+        load(d.product.id);
+      },
+      fail:function(e){ beep(false); flash('bad',esc(e.message)); } });
+  }
+  bindScan(function(c){ send(c); });
+  api('claimPick',{ id:id }).then(function(){ load(); }).catch(function(e){ flash('bad',esc(e.message)); load(); });
+}
+
+// ====== 包裝 ======
+function viewPacks(){
+  setHeader('📮 包裝覆核');
+  app.innerHTML='<div class="meta" style="margin-bottom:8px">選一張已揀貨的揀貨單開始裝箱。</div><div id="lst"><div class="meta">載入中…</div></div>';
+  api('pickLists',{ filter:'pack' }).then(function(d){
+    $('lst').innerHTML = d.list.length ? d.list.map(function(p){ return pickRow(p,'pack'); }).join('') : '<div class="card meta">目前沒有待包裝的揀貨單。</div>';
+    Array.prototype.forEach.call($('lst').querySelectorAll('[data-id]'),function(el){ el.onclick=function(){ go('pack', el.getAttribute('data-id')); }; });
+  }).catch(function(e){ $('lst').innerHTML='<div class="err">'+esc(e.message)+'</div>'; });
+}
+function viewPack(id){
+  setHeader('📮 包裝覆核');
+  var undo=false, box=null;
+  app.innerHTML='<div class="card" id="hd"><div class="meta">載入中…</div></div><div class="card" id="boxc"></div>'
+    + scanBar('掃商品條碼裝進目前這箱', '<div class="row" style="margin-top:8px"><div class="toggle grow"><button id="mIn" class="on">＋ 裝箱</button><button id="mUndo">－ 從箱退出</button></div><div style="width:96px"><input id="qty" type="number" inputmode="numeric" min="1" value="1"></div></div>')
+    + '<div class="card" id="items"></div>';
+  $('mIn').onclick=function(){ undo=false; $('mIn').className='on'; $('mUndo').className=''; };
+  $('mUndo').onclick=function(){ undo=true; $('mUndo').className='on red'; $('mIn').className=''; };
+  function load(hit){
+    api('pickDetail',{ id:id }).then(function(d){
+      if(!$('hd')) return;
+      var p=d.pick;
+      var open=d.boxes.filter(function(b){ return b.status==='包裝中'; })[0];
+      box = open ? open.id : null;
+      $('hd').innerHTML='<div class="row"><span class="pill '+(p.type==='整批'?'b':'')+'">'+esc(p.type)+'</span><b class="grow">'+esc(p.customer)+'</b><span class="pill">'+esc(p.status)+'</span></div>'
+        +(p.type==='個別'?'<div class="meta">'+esc(p.orderNo)+'・'+esc(p.consumer)+'</div>':'')
+        +'<div class="meta">已裝箱 '+d.packed+'／已揀 '+d.picked+'（應揀 '+d.need+'）</div><div class="bar"><i style="width:'+(d.need?Math.round(100*d.packed/d.need):0)+'%"></i></div>';
+      $('boxc').innerHTML = d.boxes.map(function(b){
+        return '<div class="item"><div class="grow"><b>第 '+b.seq+' 箱</b> <span class="pill '+(b.status==='包裝中'?'a':'g')+'">'+esc(b.status)+'</span> <span class="meta">'+b.units+' 件</span>'
+          +'<div class="meta">'+b.items.map(function(x){ return esc(x.name)+' ×'+x.qty; }).join('、')+'</div></div>'
+          +(b.status==='包裝中'?'<button class="btn green sm" data-seal="'+esc(b.id)+'">封箱</button>':'')+'</div>';
+      }).join('') + (open ? '' : '<button class="btn block" id="newBox" style="margin-top:6px">＋ 開新箱</button>');
+      if($('newBox')) $('newBox').onclick=function(){ busy($('newBox'), api('openBox',{ id:id })).then(function(){ load(); }).catch(function(e){ flash('bad',esc(e.message)); }); };
+      Array.prototype.forEach.call($('boxc').querySelectorAll('[data-seal]'),function(b){ b.onclick=function(){ busy(b, api('sealBox',{ boxId:b.getAttribute('data-seal') })).then(function(r){ toast('已封箱（'+r.units+' 件）'); load(); }).catch(function(e){ flash('bad',esc(e.message)); }); }; });
+      $('items').innerHTML='<div class="meta" style="margin-bottom:4px">已裝／已揀</div>'+d.items.map(function(it){
+        var done=it.packed>=it.picked && it.picked>0;
+        return '<div class="item'+(done?' done':'')+(hit===it.pid?' hit':'')+'">'+img(it.product.img)+'<div class="grow">'+esc(it.product.name)+'<div class="meta">'+esc(it.product.store||'')+'</div></div><div class="q">'+it.packed+'／'+it.picked+'</div></div>';
+      }).join('');
+    }).catch(function(e){ $('hd').innerHTML='<div class="err">'+esc(e.message)+'</div>'; });
+  }
+  function send(code, productId){
+    if(!box){ beep(false); flash('bad','請先按「＋ 開新箱」'); return; }
+    var qty=Math.max(1,parseInt($('qty').value,10)||1), u=undo;
+    enqueue({ action:'packScan', args:{ boxId:box, code:code, productId:productId||'', qty:qty, undo:u, reqId:rid() },
+      ok:function(d){
+        if(d.choose){ beep(false); choose(d.choose,function(p){ send(code,p.id); }); return; }
+        if(d.wrong){ beep(false); flash('bad','不是這張單的商品：'+(d.product?esc(d.product.name):esc(d.code||''))); return; }
+        beep(true);
+        flash(u?'warn':'ok', prodCard(d.product,'<div style="text-align:right"><div class="big">'+d.item.packed+'／'+d.item.picked+'</div></div>')+(d.packed>=d.need?'<div style="margin-top:6px">🎉 全部裝箱完成，請按「封箱」。</div>':''));
+        if($('qty')) $('qty').value=1;
+        load(d.product.id);
+      },
+      fail:function(e){ beep(false); flash('bad',esc(e.message)); } });
+  }
+  bindScan(function(c){ send(c); });
+  load();
+}
+
+// ====== 出貨 ======
+var CARRIERS=['黑貓宅急便','新竹物流','7-11 交貨便','全家店到店','郵局','自取／面交','其他'];
+function viewShip(){
+  setHeader('🚚 出貨交運');
+  app.innerHTML='<div id="lst"><div class="meta">載入中…</div></div>';
+  api('shipList',{}).then(function(d){
+    if(!d.list.length){ $('lst').innerHTML='<div class="card meta">沒有已封箱、待交運的箱子。</div>'; return; }
+    var last=lsGet(LS.carrier)||CARRIERS[0];
+    $('lst').innerHTML=d.list.map(function(b,i){
+      return '<div class="card"><div class="row"><span class="pill '+(b.type==='整批'?'b':'')+'">'+esc(b.type)+'</span><b class="grow">'+esc(b.customer)+'・第 '+b.seq+' 箱</b></div>'
+        +(b.type==='個別'?'<div class="meta">'+esc(b.orderNo)+'・'+esc(b.consumer)+'</div>':'')
+        +'<div class="meta">'+b.items.map(function(x){ return esc(x.name)+' ×'+x.qty; }).join('、')+'</div>'
+        +'<div class="row" style="margin-top:8px"><select id="c'+i+'" style="width:42%">'+CARRIERS.map(function(c){ return '<option'+(c===last?' selected':'')+'>'+esc(c)+'</option>'; }).join('')+'</select><input id="t'+i+'" class="grow" placeholder="追蹤號（可掃碼槍）"></div>'
+        +'<button class="btn green block" style="margin-top:8px" data-i="'+i+'">確認交運</button><div class="err" id="e'+i+'"></div></div>';
+    }).join('');
+    Array.prototype.forEach.call($('lst').querySelectorAll('[data-i]'),function(btn){
+      var i=+btn.getAttribute('data-i'), b=d.list[i], r=rid();
+      btn.onclick=function(){
+        var c=$('c'+i).value; lsSet(LS.carrier,c);
+        busy(btn, api('confirmShip',{ boxId:b.id, carrier:c, tracking:$('t'+i).value.trim(), reqId:r })).then(function(){ toast('已交運'); btn.closest('.card').style.display='none'; }).catch(function(e){ $('e'+i).textContent=e.message; });
+      };
+    });
+  }).catch(function(e){ $('lst').innerHTML='<div class="err">'+esc(e.message)+'</div>'; });
+}
+
+// ====== 庫存查詢 ======
+function viewSearch(){
+  setHeader('🔎 庫存查詢');
+  app.innerHTML=scanBar('掃條碼或輸入品名／商品ID')+'<div id="res"></div>';
+  function find(q){
+    $('res').innerHTML='<div class="meta">查詢中…</div>';
+    api('findProduct',{ q:q }).then(function(d){
+      if(!d.list.length){ beep(false); $('res').innerHTML='<div class="flash bad">查無對應商品：'+esc(q)+'</div>'; return; }
+      beep(true);
+      $('res').innerHTML=d.list.map(function(p){
+        return '<div class="card" data-id="'+esc(p.id)+'" style="cursor:pointer">'+prodCard(p)+'<div class="stat" style="margin-top:8px">'+['可配貨','已預留','已揀貨','已出貨','異常'].map(function(k){ return '<div><b>'+(p.stock[k]||0)+'</b>'+k+'</div>'; }).join('')+'</div>'
+          +'<div class="meta" style="margin-top:6px">訂單需求 '+p.demand.need+'・已配貨 '+p.demand.committed+'・還沒配貨 '+p.demand.waiting+'・'+esc(p.id)+(p.jan?'・'+esc(p.jan):'')+'</div></div>';
+      }).join('');
+      Array.prototype.forEach.call($('res').querySelectorAll('[data-id]'),function(el){ el.onclick=function(){ hist(el.getAttribute('data-id')); }; });
+    }).catch(function(e){ $('res').innerHTML='<div class="err">'+esc(e.message)+'</div>'; });
+  }
+  function hist(pid){
+    api('stockOf',{ productId:pid }).then(function(d){
+      $('modal').innerHTML='<div class="mask" id="mk"><div class="sheet"><h3>庫存歷程</h3>'+prodCard(d.product||{ name:pid })
+        +'<table style="margin-top:8px"><tr><th>時間</th><th>數量</th><th>從→到</th><th>人員</th></tr>'+d.history.map(function(h){ return '<tr><td>'+esc(h.time.slice(5,16))+'</td><td>'+h.qty+'</td><td>'+esc(h.from)+'→'+esc(h.to)+'<div class="meta">'+esc(h.note)+'</div></td><td>'+esc(h.who)+'</td></tr>'; }).join('')+'</table>'
+        +'<button class="btn gray block" id="mc" style="margin-top:10px">關閉</button></div></div>';
+      $('mc').onclick=closeModal;
+    }).catch(function(e){ toast(e.message); });
+  }
+  bindScan(function(c){ find(c); });
+}
+
+// ====== 管理 ======
+function viewAdmin(){
+  setHeader('⚙️ 管理');
+  app.innerHTML='<div class="card"><b>1. 同步訂單</b><div class="meta">從「十浩直播訂單管理 → 總訂單」讀取直播主＋網站訂單（只讀，不會改原表）。重複同步不會重複匯入。</div><button class="btn block" id="sync" style="margin-top:8px">立即同步訂單</button><div id="syncRes" class="meta"></div></div>'
+    +'<div class="tiles">'
+    +'<button class="tile" data-v="cust">👥 客戶配貨模式<small>整批／個別、優先順序、單筆改模式、取消</small></button>'
+    +'<button class="tile" data-v="alloc">🧾 產生揀貨單<small>先預覽，再確認預留</small></button>'
+    +'<button class="tile" data-v="allPicks">📋 所有揀貨單<small>查看、作廢</small></button>'
+    +'<button class="tile" data-v="exc">⚠️ 異常處理<small>缺貨、未知條碼、數量減少</small></button>'
+    +'<button class="tile" data-v="adjust">✏️ 庫存調整<small>盤點差異，必填原因</small></button>'
+    +'</div>';
+  Array.prototype.forEach.call(app.querySelectorAll('.tile'),function(b){ b.onclick=function(){ go(b.getAttribute('data-v')); }; });
+  $('sync').onclick=function(){
+    $('syncRes').textContent='同步中…（約 10～30 秒）';
+    busy($('sync'), api('syncOrders',{})).then(function(r){
+      $('syncRes').innerHTML='完成：新增 '+r.added+'・數量變更 '+r.changed+'・不變 '+r.unchanged+'・來源已刪除 '+r.removed+'・新客戶 '+r.newCustomers+'（'+esc(r.time)+'）';
+    }).catch(function(e){ $('syncRes').innerHTML='<span class="err">'+esc(e.message)+'</span>'; });
+  };
+}
+function pinAsk(title, fields, cb){
+  $('modal').innerHTML='<div class="mask"><div class="sheet"><h3>'+esc(title)+'</h3>'+(fields||'')
+    +'<label class="l">再輸入一次你的 PIN 確認</label><input id="pp" type="password" inputmode="numeric"><div class="err" id="pe"></div>'
+    +'<div class="row" style="margin-top:10px"><button class="btn gray grow" id="pc">取消</button><button class="btn red grow" id="po">確認</button></div></div></div>';
+  $('pc').onclick=closeModal;
+  var r=rid();
+  $('po').onclick=function(){ cb($('pp').value, r, function(e){ $('pe').textContent=e.message; }, $('po')); };
+}
+function viewCust(cid){
+  setHeader('👥 客戶配貨模式');
+  if(cid) return viewLines(cid);
+  app.innerHTML='<div class="meta" style="margin-bottom:8px">整批＝同一客戶合成一張揀貨單；個別＝每張訂單各自一張。優先順序數字小的先配貨。點客戶名稱可以看訂單、單筆改模式或取消。</div><div id="lst"><div class="meta">載入中…</div></div>';
+  api('customers',{}).then(function(d){
+    if(!d.list.length){ $('lst').innerHTML='<div class="card meta">還沒有客戶，請先同步訂單。</div>'; return; }
+    $('lst').innerHTML=d.list.map(function(c){
+      return '<div class="card"><div class="row"><b class="grow" data-open="'+esc(c.id)+'" style="cursor:pointer;color:#1d6fe8">'+esc(c.name)+' ›</b><span class="pill">'+esc(c.type)+'</span></div>'
+        +'<div class="meta">'+c.lines+' 筆・需求 '+c.need+'・已配貨 '+c.committed+'・已出貨 '+c.shipped+'</div>'
+        +'<div class="row" style="margin-top:8px"><div class="toggle grow"><button data-m="整批" data-c="'+esc(c.id)+'" class="'+(c.mode==='整批'?'on':'')+'">整批</button><button data-m="個別" data-c="'+esc(c.id)+'" class="'+(c.mode==='個別'?'on':'')+'">個別</button></div>'
+        +'<div style="width:90px"><input type="number" inputmode="numeric" value="'+c.priority+'" data-p="'+esc(c.id)+'" title="優先順序"></div></div></div>';
+    }).join('');
+    Array.prototype.forEach.call($('lst').querySelectorAll('[data-m]'),function(b){ b.onclick=function(){
+      var id=b.getAttribute('data-c'), m=b.getAttribute('data-m');
+      api('setCustomer',{ id:id, mode:m }).then(function(){ toast('已改為'+m); viewCust(); }).catch(function(e){ toast(e.message); });
+    }; });
+    Array.prototype.forEach.call($('lst').querySelectorAll('[data-p]'),function(inp){ inp.onchange=function(){
+      api('setCustomer',{ id:inp.getAttribute('data-p'), priority:inp.value }).then(function(){ toast('已更新優先順序'); }).catch(function(e){ toast(e.message); });
+    }; });
+    Array.prototype.forEach.call($('lst').querySelectorAll('[data-open]'),function(b){ b.onclick=function(){ go('cust', b.getAttribute('data-open')); }; });
+  }).catch(function(e){ $('lst').innerHTML='<div class="err">'+esc(e.message)+'</div>'; });
+}
+function viewLines(cid){
+  app.innerHTML='<div id="lst"><div class="meta">載入中…</div></div>';
+  api('orderLines',{ customerId:cid }).then(function(d){
+    setHeader('👥 '+(d.customer?d.customer.name:cid));
+    var byOrder={}, order=[];
+    d.list.forEach(function(l){ if(!byOrder[l.orderNo]){ byOrder[l.orderNo]=[]; order.push(l.orderNo); } byOrder[l.orderNo].push(l); });
+    $('lst').innerHTML='<div class="meta" style="margin-bottom:8px">客戶預設：<b>'+esc(d.customer?d.customer.mode:'')+'</b>。下面可以讓某張訂單改用另一種方式（混合模式）。只影響還沒產生揀貨單的數量。</div>'
+      + order.map(function(no){
+        var ls=byOrder[no], m=ls[0].mode;
+        return '<div class="card"><div class="row"><b class="grow">'+esc(no)+'</b><span class="meta">'+esc(ls[0].consumer)+'</span></div>'
+          +'<div class="toggle" style="margin:8px 0"><button data-o="'+esc(no)+'" data-m="" class="'+(!m?'on':'')+'">依客戶</button><button data-o="'+esc(no)+'" data-m="整批" class="'+(m==='整批'?'on':'')+'">整批</button><button data-o="'+esc(no)+'" data-m="個別" class="'+(m==='個別'?'on':'')+'">個別</button></div>'
+          + ls.map(function(l){
+            return '<div class="item">'+img(l.img)+'<div class="grow"><div>'+esc(l.name)+'</div><div class="meta">需求 '+l.need+(l.cancel?'（已取消 '+l.cancel+'）':'')+'・已配貨 '+l.committed+'・已出貨 '+l.shipped+(l.srcState?'・<b style="color:#d92d20">'+esc(l.srcState)+'</b>':'')+'</div></div>'
+              +(l.need>0?'<button class="btn ghost sm" data-cx="'+esc(l.id)+'" data-n="'+l.need+'">取消</button>':'')+'</div>';
+          }).join('') + '</div>';
+      }).join('');
+    Array.prototype.forEach.call($('lst').querySelectorAll('[data-o]'),function(b){ b.onclick=function(){
+      api('setLineMode',{ orderNo:b.getAttribute('data-o'), mode:b.getAttribute('data-m') }).then(function(){ toast('已更新'); viewLines(cid); }).catch(function(e){ toast(e.message); });
+    }; });
+    Array.prototype.forEach.call($('lst').querySelectorAll('[data-cx]'),function(b){ b.onclick=function(){
+      var id=b.getAttribute('data-cx'), n=+b.getAttribute('data-n');
+      pinAsk('取消訂單數量', '<label class="l">取消幾件（最多 '+n+'）</label><input id="cq" type="number" inputmode="numeric" value="'+n+'"><label class="l">原因（必填）</label><input id="cr">', function(pin, r, err, btn){
+        busy(btn, api('cancelLine',{ lineId:id, qty:+$('cq').value, reason:$('cr').value, pin:pin, reqId:r })).then(function(x){ closeModal(); toast('已取消'+(x.released?'，退回可配貨 '+x.released:'')); viewLines(cid); }).catch(err);
+      });
+    }; });
+  }).catch(function(e){ $('lst').innerHTML='<div class="err">'+esc(e.message)+'</div>'; });
+}
+function viewAlloc(){
+  setHeader('🧾 產生揀貨單');
+  app.innerHTML='<div class="meta" style="margin-bottom:8px">勾選要配貨的客戶（全部不勾＝全部客戶）。先按「預覽」看看會產生哪些揀貨單，再按「確認產生」。可配貨不夠時，依優先順序、下單時間先後分配。</div><div id="lst" class="card"><div class="meta">載入中…</div></div>'
+    +'<div class="row"><button class="btn ghost grow" id="pv">預覽</button><button class="btn grow" id="ok" disabled>確認產生</button></div><div id="res" style="margin-top:10px"></div>';
+  var r=rid();
+  api('customers',{}).then(function(d){
+    $('lst').innerHTML=d.list.filter(function(c){ return c.need>c.committed; }).map(function(c){
+      return '<label class="item" style="cursor:pointer"><input type="checkbox" value="'+esc(c.id)+'" style="width:22px;min-height:22px"><div class="grow">'+esc(c.name)+' <span class="pill '+(c.mode==='整批'?'b':'')+'">'+esc(c.mode)+'</span><div class="meta">還沒配貨 '+(c.need-c.committed)+' 件・優先 '+c.priority+'</div></div></label>';
+    }).join('') || '<div class="meta">所有訂單都已配貨。</div>';
+  }).catch(function(e){ $('lst').innerHTML='<div class="err">'+esc(e.message)+'</div>'; });
+  function ids(){ return Array.prototype.map.call($('lst').querySelectorAll('input:checked'),function(i){ return i.value; }); }
+  function show(d, done){
+    $('res').innerHTML='<div class="card"><b>'+(done?'已產生 '+(d.created||0)+' 張揀貨單':'預覽：會產生 '+d.lists.length+' 張揀貨單')+'</b>'
+      +(d.message?'<div class="meta">'+esc(d.message)+'</div>':'')
+      +d.lists.map(function(x){ return '<div class="item"><span class="pill '+(x.type==='整批'?'b':'')+'">'+esc(x.type)+'</span><div class="grow">'+esc(x.customer)+(x.orderNo&&x.type==='個別'?'<div class="meta">'+esc(x.orderNo)+'・'+esc(x.consumer)+'</div>':'')+'</div><div class="q">'+x.units+' 件</div></div>'; }).join('')
+      +(d.shortUnits?'<div class="meta" style="margin-top:6px">庫存不夠，還有 '+d.shortUnits+' 件等下次到貨再配。</div>':'')+'</div>';
+  }
+  $('pv').onclick=function(){ busy($('pv'), api('allocate',{ customerIds:ids(), preview:true, reqId:rid() })).then(function(d){ show(d); $('ok').disabled=!d.lists.length; }).catch(function(e){ $('res').innerHTML='<div class="err">'+esc(e.message)+'</div>'; }); };
+  $('ok').onclick=function(){ busy($('ok'), api('allocate',{ customerIds:ids(), reqId:r })).then(function(d){ if(d.already){ toast('已經產生過了'); return; } show(d,true); $('ok').disabled=true; r=rid(); }).catch(function(e){ $('res').innerHTML='<div class="err">'+esc(e.message)+'</div>'; }); };
+}
+function viewAllPicks(){
+  setHeader('📋 所有揀貨單');
+  app.innerHTML='<div id="lst"><div class="meta">載入中…</div></div>';
+  api('pickLists',{ filter:'all' }).then(function(d){
+    $('lst').innerHTML = d.list.map(function(p){ return pickRow(p).replace('</div></div>','</div>'+(['已出貨','作廢'].indexOf(p.status)<0?'<button class="btn ghost sm" data-cx="'+esc(p.id)+'" style="margin-top:8px">作廢</button>':'')+'</div>'); }).join('') || '<div class="card meta">還沒有揀貨單</div>';
+    Array.prototype.forEach.call($('lst').querySelectorAll('[data-cx]'),function(b){ b.onclick=function(ev){
+      ev.stopPropagation(); var id=b.getAttribute('data-cx');
+      pinAsk('作廢揀貨單', '<div class="meta">沒揀的預留退回可配貨；已揀的也會退回可配貨（請把貨放回貨架）。已裝箱的要先從箱子退出。</div><label class="l">原因（必填）</label><input id="cr">', function(pin, r, err, btn){
+        busy(btn, api('cancelPick',{ id:id, reason:$('cr').value, pin:pin, reqId:r })).then(function(){ closeModal(); toast('已作廢'); viewAllPicks(); }).catch(err);
+      });
+    }; });
+  }).catch(function(e){ $('lst').innerHTML='<div class="err">'+esc(e.message)+'</div>'; });
+}
+function viewExc(){
+  setHeader('⚠️ 異常處理');
+  app.innerHTML='<div id="lst"><div class="meta">載入中…</div></div>';
+  api('exceptions',{}).then(function(d){
+    $('lst').innerHTML = d.list.length ? d.list.map(function(x,i){
+      var acts = x.type==='揀貨缺貨'
+        ? '<button class="btn green sm" data-a="found" data-i="'+i+'">找到了，回可配貨</button> <button class="btn red sm" data-a="lost" data-i="'+i+'">確認遺失</button>'
+        : (x.type==='未知條碼' ? '<button class="btn sm" data-a="map" data-i="'+i+'">指定對應商品</button> ' : '') + '<button class="btn gray sm" data-a="done" data-i="'+i+'">標記已處理</button>';
+      return '<div class="card"><div class="row"><span class="pill r">'+esc(x.type)+'</span><b class="grow">'+esc(x.name||x.code||x.pid)+'</b><span class="q">'+x.qty+'</span></div>'
+        +'<div class="meta">'+esc(x.time)+'・'+esc(x.by)+'・'+esc(x.doc)+'</div><div class="meta">'+esc(x.note)+'</div><div style="margin-top:8px">'+acts+'</div></div>';
+    }).join('') : '<div class="card meta">沒有待處理的異常 👍</div>';
+    Array.prototype.forEach.call($('lst').querySelectorAll('[data-a]'),function(b){ b.onclick=function(){
+      var x=d.list[+b.getAttribute('data-i')], a=b.getAttribute('data-a');
+      if(a==='map') return mapDlg(x);
+      pinAsk(a==='found'?'找到了：回到可配貨':(a==='lost'?'確認遺失／損壞':'標記已處理'), '<label class="l">說明（選填）</label><input id="xn">', function(pin, r, err, btn){
+        busy(btn, api('resolveException',{ id:x.id, action:a, note:$('xn').value, pin:pin, reqId:r })).then(function(){ closeModal(); toast('已處理'); viewExc(); }).catch(err);
+      });
+    }; });
+  }).catch(function(e){ $('lst').innerHTML='<div class="err">'+esc(e.message)+'</div>'; });
+  function mapDlg(x){
+    $('modal').innerHTML='<div class="mask"><div class="sheet"><h3>條碼 '+esc(x.code)+' 對應哪個商品？</h3><div class="row"><input id="mq" class="grow" placeholder="輸入品名或商品ID搜尋"><button class="btn" id="ms">搜尋</button></div><div id="mr"></div><button class="btn gray block" id="mc" style="margin-top:10px">取消</button></div></div>';
+    $('mc').onclick=closeModal;
+    $('ms').onclick=function(){ api('findProduct',{ q:$('mq').value }).then(function(d){
+      $('mr').innerHTML=d.list.map(function(p,i){ return '<div class="item" data-i="'+i+'" style="cursor:pointer">'+img(p.img)+'<div class="grow">'+esc(p.name)+'<div class="meta">'+esc(p.store)+'・'+esc(p.id)+'</div></div></div>'; }).join('')||'<div class="meta">找不到</div>';
+      Array.prototype.forEach.call($('mr').querySelectorAll('[data-i]'),function(el){ el.onclick=function(){
+        var p=d.list[+el.getAttribute('data-i')];
+        api('mapCode',{ code:x.code, productId:p.id }).then(function(){ closeModal(); toast('已對應，下次掃這個條碼就會找到「'+p.name+'」。請重新掃描入庫。'); }).catch(function(e){ toast(e.message); });
+      }; });
+    }).catch(function(e){ toast(e.message); }); };
+  }
+}
+function viewAdjust(){
+  setHeader('✏️ 庫存調整');
+  var pid='';
+  app.innerHTML='<div class="card"><div class="meta">用在盤點差異、破損等。每次調整都會留下紀錄（原因必填）。</div>'+scanBar('掃條碼或輸入品名找商品')+'<div id="pp"></div>'
+    +'<label class="l">調整方式</label><select id="ty"><option value="in">盤點多出：（外部）→ 可配貨</option><option value="out">盤點短少／報廢：可配貨 →（移出）</option><option value="toexc">暫列異常：可配貨 → 異常</option><option value="fromexc">異常解除：異常 → 可配貨</option></select>'
+    +'<label class="l">數量</label><input id="aq" type="number" inputmode="numeric" min="1" value="1"><label class="l">原因（必填）</label><input id="ar"><div class="err" id="ae"></div><button class="btn block" style="margin-top:10px" id="go">送出調整</button></div>';
+  bindScan(function(q){ api('findProduct',{ q:q }).then(function(d){
+    if(!d.list.length){ flash('bad','查無對應商品'); return; }
+    var pick=function(p){ pid=p.id; $('pp').innerHTML='<div class="card">'+prodCard(p)+'<div class="meta" style="margin-top:6px">可配貨 '+p.stock['可配貨']+'・異常 '+p.stock['異常']+'</div></div>'; };
+    if(d.list.length>1) choose(d.list,pick); else pick(d.list[0]);
+  }).catch(function(e){ flash('bad',esc(e.message)); }); });
+  $('go').onclick=function(){
+    if(!pid){ $('ae').textContent='請先掃描或搜尋商品'; return; }
+    var m={ in:['','可配貨'], out:['可配貨',''], toexc:['可配貨','異常'], fromexc:['異常','可配貨'] }[$('ty').value];
+    pinAsk('確認庫存調整','',function(pin, r, err, btn){
+      busy(btn, api('adjust',{ productId:pid, from:m[0], to:m[1], qty:+$('aq').value, reason:$('ar').value, pin:pin, reqId:r })).then(function(d){ closeModal(); toast('已調整：可配貨 '+d.before['可配貨']+' → '+d.after['可配貨']); viewAdjust(); }).catch(err);
+    });
+  };
+}
+
+document.addEventListener('visibilitychange',function(){ if(document.hidden) stopCam(); });
+render();
+})();
+</script>
+</body>
+</html>
