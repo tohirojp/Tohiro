@@ -53,74 +53,64 @@
   <div class="row"><label class="btn ghost" for="file">📸 拍照辨識</label><button class="btn ghost" id="retry">↻ 重新掃描</button></div>
   <input type="file" id="file" accept="image/*" capture="environment">
   <div class="manual"><input id="code" inputmode="numeric" placeholder="手動輸入條碼或商品コード"><button class="btn" id="go">查詢</button></div>
-  <div class="note" id="note">相機會一直開著，掃到就直接顯示訂購／已買／剩餘，<b>不會自動採買</b>。要採買時按「到採買頁確認採買」。<br>第一次使用請允許相機。</div>
+  <div class="note" id="note">相機會一直開著，掃到就直接顯示訂購／已買／剩餘，<b>不會自動採買</b>。掃到後按「📤 送到採買頁」，再切回原本的採買分頁確認採買。<br>第一次使用請允許相機。</div>
   <div class="note" id="stat"></div>
 </div>
 <script>
 (function(){
-  // 只允許回到十浩的 Google Apps Script 網站（避免被拿去轉址到別的網站）
+  // 只跟十浩的 Google Apps Script 網站溝通（避免被拿去連到別的網站）
   var q = new URLSearchParams(location.search), ret = q.get('ret') || '';
   if (!/^https:\/\/script\.google\.com\/(a\/[^\/]+\/)?macros\/s\/[A-Za-z0-9_-]+\/(exec|dev)$/.test(ret)) ret = '';
-  // 登入：網址只帶「一次性交接碼」k（10 分鐘內有效、用一次就失效），換到的登入狀態存在這個網站自己的手機儲存空間，
-  // 之後連續掃描都不用再登入；採購網站按「登出」或登入過期（6 小時）才需要重新登入。
-  var kt = q.get('k') || '', st = q.get('s'), tk = '', TK_KEY = 'shihao_scan_tk';
-  if (!/^[A-Za-z0-9]{20,64}$/.test(kt)) kt = '';
-  try { tk = localStorage.getItem(TK_KEY) || ''; } catch (e) {}
-  if (!/^[A-Za-z0-9-]{10,80}$/.test(tk)) tk = '';
-  if (st != null) st = st.slice(0, 40);
-  // 從採買頁新分頁開過來時：n = 這次的一次性工作階段代碼，o = 原採買頁（Google 框框）的網域；掃完用跨頁訊息傳回原頁
-  var nn = q.get('n') || '', oo = q.get('o') || '';
-  if (!/^[a-f0-9]{32}$/.test(nn)) nn = '';
-  if (!/^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.googleusercontent\.com$/.test(oo)) oo = '';
-  function hasOpener(){ try { return !!(window.opener && !window.opener.closed); } catch (e) { return false; } }
-  try { history.replaceState(null, '', location.pathname + '?ret=' + encodeURIComponent(ret)); } catch (e) {}   // 交接碼馬上從網址列拿掉
-  function setTk(v){ tk = v || ''; try { if (tk) localStorage.setItem(TK_KEY, tk); else localStorage.removeItem(TK_KEY); } catch (e) {} }
+  // 掃碼工作階段ID：原採買頁按 📷 時由伺服器產生（隨機 32 碼、綁帳號、10 分鐘沒用就失效）。
+  // 這頁沒有登入權限，只能用這個ID「查商品」和「送出掃碼結果」；不能採買、不能改數量。
+  var sid = q.get('sid') || '';
+  if (!/^[a-f0-9]{32}$/.test(sid)) { sid = ''; try { sid = sessionStorage.getItem('shihao_scan_sid') || ''; } catch (e) {} if (!/^[a-f0-9]{32}$/.test(sid)) sid = ''; }
+  try { if (sid) sessionStorage.setItem('shihao_scan_sid', sid); localStorage.removeItem('shihao_scan_tk'); } catch (e) {}   // 舊版存的登入憑證一併清掉
+  try { history.replaceState(null, '', location.pathname + '?ret=' + encodeURIComponent(ret)); } catch (e) {}   // ID 不留在網址列
   var $ = function(id){ return document.getElementById(id); };
   function msg(t, bad){ var m=$('msg'); m.textContent=t; m.className='msg'+(bad?' bad':''); }
-  var leaving = false, acked = false;
-  window.addEventListener('message', function(e){
-    if (!oo || e.origin !== oo) return;
-    var d = e.data; if (d && d.type === 'shihao-scan-ack' && d.n === nn) acked = true;
-  });
-  // 回採買頁：優先傳回「原本已登入的分頁」；傳不回去才用備用（同分頁重新開採買頁＋一次性交接碼）
-  function goBack(code, key){
-    if (leaving) return;
-    if (!(nn && oo && hasOpener())) return navBack(code);
-    leaving = true; stop(); acked = false;
-    if (!code) {   // ✕ 返回：不用傳東西，直接關掉這個分頁
-      try { window.close(); } catch (e) {}
-      setTimeout(function(){ leaving = false; navBack(''); }, 600);
-      return;
-    }
-    msg('傳回採買頁中…');
-    try { window.opener.postMessage({ type:'shihao-scan', n:nn, key:key || '', code:code }, oo); } catch (e) {}
-    var t0 = Date.now(), w = setInterval(function(){
-      if (acked) {
-        clearInterval(w);
-        msg('✓ 已傳回採買頁');
-        try { window.close(); } catch (e) {}
-        setTimeout(function(){   // 瀏覽器不讓關分頁時
-          leaving = false;
-          showRes('<div class="nm">✓ 已傳回採買頁</div><div class="sub">請切換回原本的採買分頁（Safari 右下角分頁按鈕），商品已經定位好了。</div>' + CONT);
-        }, 700);
-      } else if (Date.now() - t0 > 2500) {   // 原分頁沒回應 → 備用
-        clearInterval(w); leaving = false; navBack(code);
-      }
-    }, 100);
+  function tryClose(after){   // 這個分頁是採買頁用程式開的，通常可以自己關掉；關不掉就留著顯示提示
+    try { window.close(); } catch (e) {}
+    setTimeout(function(){ if (after) after(); }, 600);
   }
-  function navBack(code){
-    if (!ret) { msg(code ? '掃到：' + code + '（沒有返回網址，請回採購網站手動輸入）' : '沒有返回網址，請直接切回採購網站。', !code); return; }
-    if (leaving) return; leaving = true; stop();
-    msg('回到採購網站中…');
-    function nav(k){
-      var ps = [];
-      if (code) ps.push('scan=' + encodeURIComponent(code));
-      if (k) ps.push('k=' + encodeURIComponent(k));   // 一次性交接碼，回去不用重新登入
-      if (st != null) ps.push('s=' + encodeURIComponent(st));
-      location.href = ret + (ps.length ? '?' + ps.join('&') : '');
-    }
-    if (!tk) return nav('');
-    api({ api:'ticket', t:tk }, function(r){ nav(r && r.ok && r.ticket ? r.ticket : ''); }, 8000);
+  var SENT = { seq:0, name:'', timer:null };
+  function sendToBuyPage(p, code){   // 送出掃碼結果給原採買頁（經伺服器一次性交接）
+    if (!sid) return expired();
+    msg(''); showRes('<div class="nm">送出中…</div><div class="sub">'+esc(p.name)+'</div>');
+    api({ api:'submit', sid:sid, key:p.key, code:code }, function(r){
+      if (!r || !r.ok) {
+        if (r && /SCAN_SESSION/.test(r.error||'')) return expired();
+        showOne(p, code); stat('送出失敗（' + ((r && r.error) || '網路') + '），請再按一次。', true); return;
+      }
+      SENT.seq = r.seq; SENT.name = p.name; stop();
+      showSent(false);
+      watchReceived();
+      tryClose(function(){ showSent(false); });
+    }, 15000);
+  }
+  function showSent(received){
+    D.shown = null;
+    showRes('<div class="nm">' + (received ? '✓ 採買頁已收到並定位' : '✓ 已送出') + '</div>'
+      + '<div class="sub">' + esc(SENT.name) + '</div>'
+      + '<div class="sub" style="margin-top:8px">請切回原本的<b>採買分頁</b>（Safari 右下角的分頁按鈕），會自動停在這個商品。確認數量後按「確認採買」。</div>'
+      + '<div class="row"><button class="btn ghost" data-a="cont">↻ 繼續掃描下一件</button></div>');
+  }
+  function watchReceived(){   // 顯示採買頁有沒有收到（方便判斷卡在哪一步）
+    if (SENT.timer) clearInterval(SENT.timer);
+    var n = 0, seq = SENT.seq;
+    SENT.timer = setInterval(function(){
+      if (++n > 120 || seq !== SENT.seq) { clearInterval(SENT.timer); return; }
+      if (document.hidden) return;
+      api({ api:'status', sid:sid }, function(r){
+        if (r && r.ok && r.received >= seq && seq === SENT.seq) { clearInterval(SENT.timer); stat('✓ 採買頁已收到並定位（' + SENT.name + '）'); if (!$('res').classList.contains('hidden') && !D.shown) showSent(true); }
+      }, 8000);
+    }, 3000);
+  }
+  function expired(){
+    D.shown = null; D.list = null; msg('');
+    stat('掃碼工作階段已失效。', true);
+    showRes('<div class="bad">掃碼工作階段已失效</div><div class="sub">可能超過 10 分鐘沒使用，或採買頁已登出。請關掉這個分頁，回採買頁重新按 📷。</div>'
+      + '<div class="row"><button class="btn" data-a="close">關閉這個分頁</button></div>');
   }
   // ---- 跟採購網站（Google Apps Script）溝通：先用 fetch，不行再用 JSONP ----
   var NJ = 0;
@@ -143,7 +133,7 @@
       .catch(function(){ if (!finished) jsonp(); });
   }
   function stat(t, bad){ var e=$('stat'); if(e){ e.textContent=t; e.style.color = bad ? '#ff8a80' : ''; } }
-  $('back').onclick = function(e){ e.preventDefault(); goBack(''); };
+  $('back').onclick = function(e){ e.preventDefault(); stop(); tryClose(function(){ msg('請切回原本的採買分頁（Safari 右下角的分頁按鈕）。'); }); };
   $('go').onclick = function(){ var c=$('code').value.replace(/\s/g,''); if(!c){ msg('請輸入條碼',true); return; } $('code').blur(); S.done=false; found(c); };
   $('code').addEventListener('keydown', function(e){ if(e.key==='Enter') $('go').click(); });
   $('retry').onclick = function(){ hideRes(); start(); };
@@ -153,13 +143,13 @@
   function esc(t){ return String(t==null?'':t).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function fmt(n){ n=Number(n)||0; return String(Math.round(n*100)/100); }
   function loadData(done){
-    if (!ret || !tk || D.loading) { if(done) done(); return; }
+    if (!ret || !sid || D.loading) { if(done) done(); return; }
     D.loading = true;
-    api({ api:'products', t:tk }, function(r){
+    api({ api:'products', sid:sid }, function(r){
       D.loading = false;
-      if (r && r.ok && r.products) { D.list = r.products; D.at = Date.now(); stat('✓ 已登入' + (r.user ? '（' + r.user + '）' : '') + '｜商品資料 ' + r.products.length + ' 項'); }
-      else if (r && /LOGIN/.test(r.error || '')) { D.list = null; setTk(''); stat('登入已過期，請按右上「✕ 返回」回採購網站重新登入，再按 📷。', true); }
-      else if (!D.list) stat('讀不到商品資料（' + ((r && r.error) || '網路') + '）。掃到後會回採購網站找商品。', true);
+      if (r && r.ok && r.products) { D.list = r.products; D.at = Date.now(); stat('✓ 已連線採買頁' + (r.user ? '（' + r.user + '）' : '') + '｜商品資料 ' + r.products.length + ' 項'); }
+      else if (r && /SCAN_SESSION/.test(r.error || '')) { D.list = null; stat('掃碼工作階段已失效，請回採買頁重新按 📷。', true); }
+      else if (!D.list) stat('讀不到商品資料（' + ((r && r.error) || '網路') + '），請按「↻ 重新掃描」再試。', true);
       if (done) done(r);
     });
   }
@@ -184,10 +174,10 @@
     if(!out.length) L.forEach(function(p){ var pj=normCode(p.jan); if(pj && (pj===b || (pj.length>=13 && pj.slice(0,13)===j))) add(p); });
     return { code:b, list:out };
   }
-  function needLogin(){   // 沒登入／已登出／過期：留在這頁說明，不自動跳走
-    D.shown = null; msg('');
-    showRes('<div class="bad">需要重新登入</div><div class="sub">可能已登出或登入超過 6 小時。請回採購網站登入後，再按 📷。</div>'
-      + '<div class="row"><button class="btn" data-a="manual">回採購網站登入</button></div>');
+  function noData(txt){   // 還沒讀到商品資料：留在這頁說明（不跳走）
+    if (!sid) { msg(''); showRes('<div class="bad">請從採買頁按 📷 開啟這一頁</div><div class="sub">掃到：'+esc(txt)+'</div>' + CONT); return; }
+    msg(''); showRes('<div class="bad">還讀不到商品資料</div><div class="sub">掃到：'+esc(txt)+'。請稍等幾秒後按「↻ 繼續掃描」再掃一次。</div>' + CONT);
+    if (!D.loading) loadData();
   }
   function hideRes(){ D.shown=null; $('res').classList.add('hidden'); $('res').innerHTML=''; $('box').classList.remove('small'); }
   function showRes(html){ $('res').innerHTML=html; $('res').classList.remove('hidden'); $('box').classList.add('small'); }
@@ -199,7 +189,7 @@
       + '<div><div class="nm">'+esc(p.name)+'</div><div class="sub">'+esc(p.store)+(p.spec?'｜'+esc(p.spec):'')+(p.nameJp?'<br>'+esc(p.nameJp):'')+'</div></div></div>'
       + '<div class="nums"><div>訂購<b>'+fmt(p.ordered)+'</b></div><div>已買<b>'+fmt(p.bought)+'</b></div><div class="'+(done?'done':'rem')+'">剩餘<b>'+fmt(p.remaining)+'</b></div></div>'
       + (done ? '<div class="sub" style="margin-bottom:8px">✅ 這個已經買夠了</div>' : '')
-      + '<div class="row"><button class="btn ghost" data-a="cont">↻ 繼續掃描</button><button class="btn" data-a="buy">🛒 到採買頁確認採買</button></div>'
+      + '<div class="row"><button class="btn ghost" data-a="cont">↻ 繼續掃描</button><button class="btn" data-a="buy">📤 送到採買頁</button></div>'
       + '<div class="tip">條碼 '+esc(code)+'｜掃描只查詢，不會改任何數量。</div>');
   }
   function showFound(raw){
@@ -221,8 +211,8 @@
     if (b.dataset.i != null && D.pick) { var p = D.pick.list[+b.dataset.i]; if(p) showOne(p, D.pick.code); return; }
     var a = b.dataset.a;
     if (a === 'cont') { hideRes(); resume(); }
-    else if (a === 'buy' && D.shown) { goBack(D.shown.code, D.shown.key); }
-    else if (a === 'manual') { goBack(''); }
+    else if (a === 'buy' && D.shown) { var k=D.shown.key, p=(D.list||[]).filter(function(x){ return x.key===k; })[0]; if (p) sendToBuyPage(p, D.shown.code); }
+    else if (a === 'manual' || a === 'close') { stop(); tryClose(function(){ msg('請切回原本的採買分頁（Safari 右下角的分頁按鈕）。'); }); }
   });
   function refreshShown(){
     if (D.list && Date.now() - D.at < 20000) return;
@@ -265,11 +255,10 @@
     if (D.list) { S.paused = true; showFound(txt); refreshShown(); return; }   // 連續掃描：相機不關，直接顯示
     if (D.loading) {   // 商品資料還在讀：等一下再顯示，不要離開這頁
       S.paused = true; msg('掃到：' + txt + '，讀取商品資料中…');
-      var w = setInterval(function(){ if (D.loading) return; clearInterval(w); if (D.list) showFound(txt); else if (!tk) needLogin(); else goBack(txt); }, 300);
+      var w = setInterval(function(){ if (D.loading) return; clearInterval(w); if (D.list) showFound(txt); else noData(txt); }, 300);
       return;
     }
-    if (!tk) { S.paused = true; needLogin(); return; }
-    goBack(txt);
+    S.paused = true; noData(txt);
   }
   function resume(){   // 相機一直開著，只是重新開始辨識 → 不會再問相機權限
     S.done=false; S.paused=false;
@@ -347,18 +336,8 @@
   });
   start();
   function boot(){
-    if (!ret) { $('note').innerHTML = '請從採購網站按 📷 開啟這一頁。'; return; }
-    if (kt) {   // 剛從採購網站過來：用交接碼換登入狀態（只換一次）
-      stat('登入中…');
-      var k = kt; kt = ''; D.loading = true;
-      return api({ api:'redeem', k:k }, function(r){
-        D.loading = false;
-        if (r && r.ok && r.token) setTk(r.token);
-        if (tk) loadData(); else stat('沒有登入資料，請按「✕ 返回」回採購網站登入後再按 📷。', true);
-      });
-    }
-    if (tk) { stat('讀取商品資料中…'); loadData(); }
-    else stat('沒有登入資料，請按「✕ 返回」回採購網站登入後再按 📷。', true);
+    if (!ret || !sid) { $('note').innerHTML = '請從採買頁按 📷 開啟這一頁。'; stat('沒有掃碼工作階段。', true); return; }
+    stat('連線採買頁中…'); loadData();
   }
   boot();
   window.addEventListener('pagehide', function(){ stop(); });   // 離開掃碼頁一定關相機
