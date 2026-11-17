@@ -68,12 +68,47 @@
   try { tk = localStorage.getItem(TK_KEY) || ''; } catch (e) {}
   if (!/^[A-Za-z0-9-]{10,80}$/.test(tk)) tk = '';
   if (st != null) st = st.slice(0, 40);
+  // 從採買頁新分頁開過來時：n = 這次的一次性工作階段代碼，o = 原採買頁（Google 框框）的網域；掃完用跨頁訊息傳回原頁
+  var nn = q.get('n') || '', oo = q.get('o') || '';
+  if (!/^[a-f0-9]{32}$/.test(nn)) nn = '';
+  if (!/^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.googleusercontent\.com$/.test(oo)) oo = '';
+  function hasOpener(){ try { return !!(window.opener && !window.opener.closed); } catch (e) { return false; } }
   try { history.replaceState(null, '', location.pathname + '?ret=' + encodeURIComponent(ret)); } catch (e) {}   // 交接碼馬上從網址列拿掉
   function setTk(v){ tk = v || ''; try { if (tk) localStorage.setItem(TK_KEY, tk); else localStorage.removeItem(TK_KEY); } catch (e) {} }
   var $ = function(id){ return document.getElementById(id); };
   function msg(t, bad){ var m=$('msg'); m.textContent=t; m.className='msg'+(bad?' bad':''); }
-  var leaving = false;
-  function goBack(code){
+  var leaving = false, acked = false;
+  window.addEventListener('message', function(e){
+    if (!oo || e.origin !== oo) return;
+    var d = e.data; if (d && d.type === 'shihao-scan-ack' && d.n === nn) acked = true;
+  });
+  // 回採買頁：優先傳回「原本已登入的分頁」；傳不回去才用備用（同分頁重新開採買頁＋一次性交接碼）
+  function goBack(code, key){
+    if (leaving) return;
+    if (!(nn && oo && hasOpener())) return navBack(code);
+    leaving = true; stop(); acked = false;
+    if (!code) {   // ✕ 返回：不用傳東西，直接關掉這個分頁
+      try { window.close(); } catch (e) {}
+      setTimeout(function(){ leaving = false; navBack(''); }, 600);
+      return;
+    }
+    msg('傳回採買頁中…');
+    try { window.opener.postMessage({ type:'shihao-scan', n:nn, key:key || '', code:code }, oo); } catch (e) {}
+    var t0 = Date.now(), w = setInterval(function(){
+      if (acked) {
+        clearInterval(w);
+        msg('✓ 已傳回採買頁');
+        try { window.close(); } catch (e) {}
+        setTimeout(function(){   // 瀏覽器不讓關分頁時
+          leaving = false;
+          showRes('<div class="nm">✓ 已傳回採買頁</div><div class="sub">請切換回原本的採買分頁（Safari 右下角分頁按鈕），商品已經定位好了。</div>' + CONT);
+        }, 700);
+      } else if (Date.now() - t0 > 2500) {   // 原分頁沒回應 → 備用
+        clearInterval(w); leaving = false; navBack(code);
+      }
+    }, 100);
+  }
+  function navBack(code){
     if (!ret) { msg(code ? '掃到：' + code + '（沒有返回網址，請回採購網站手動輸入）' : '沒有返回網址，請直接切回採購網站。', !code); return; }
     if (leaving) return; leaving = true; stop();
     msg('回到採購網站中…');
@@ -186,7 +221,7 @@
     if (b.dataset.i != null && D.pick) { var p = D.pick.list[+b.dataset.i]; if(p) showOne(p, D.pick.code); return; }
     var a = b.dataset.a;
     if (a === 'cont') { hideRes(); resume(); }
-    else if (a === 'buy' && D.shown) { goBack(D.shown.code); }
+    else if (a === 'buy' && D.shown) { goBack(D.shown.code, D.shown.key); }
     else if (a === 'manual') { goBack(''); }
   });
   function refreshShown(){
