@@ -87,7 +87,7 @@ td,th{padding:6px 4px;border-top:1px solid var(--line);text-align:left;vertical-
 'use strict';
 // ====== 設定 ======
 // 後端網址（Apps Script 部署後的 /exec 網址）。空白時第一次開啟會請你貼上。
-var DEFAULT_API = '';
+var DEFAULT_API = 'https://script.google.com/macros/s/AKfycbwt2SUB1iDS9VGoGOU_ds86JM44v5CPnNkLxBTbRD-Mjw2Jn4AT1LQguy1W12oPCMQ/exec';
 var LS = { api:'wms_api', tok:'wms_tok', user:'wms_user', batch:'wms_batch', carrier:'wms_carrier' };
 function lsGet(k){ try{ return localStorage.getItem(k)||''; }catch(e){ return ''; } }
 function lsSet(k,v){ try{ if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v); }catch(e){} }
