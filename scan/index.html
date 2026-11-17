@@ -26,6 +26,21 @@
   .manual input{flex:1;min-width:0;padding:12px;border-radius:12px;border:1px solid #444;background:#1c1f26;color:#fff;font-size:16px}
   .note{font-size:13px;color:#8b93a5;margin-top:12px;line-height:1.6}
   .hidden{display:none!important}
+  .box.small{aspect-ratio:auto;height:26vh}
+  .res{background:#fff;color:#1b1f2a;border-radius:14px;padding:14px;margin-top:10px}
+  .res .top{display:flex;gap:12px;align-items:flex-start}
+  .res img{width:84px;height:84px;object-fit:cover;border-radius:10px;background:#eee;flex:none}
+  .res .nm{font-size:17px;font-weight:800;line-height:1.35}
+  .res .sub{font-size:13px;color:var(--sub);margin-top:3px}
+  .nums{display:flex;gap:8px;margin:12px 0}
+  .nums div{flex:1;background:#f3f5fa;border-radius:10px;padding:8px 4px;text-align:center;font-size:13px;color:var(--sub)}
+  .nums b{display:block;font-size:24px;color:#1b1f2a}
+  .nums .rem b{color:var(--pri)} .nums .done b{color:#2e7d32}
+  .res .row .btn.ghost{background:#e9edf5;color:#1b1f2a}
+  .res .bad{color:var(--bad);font-weight:800;font-size:16px}
+  .pick{display:block;width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px;margin-top:8px;font-size:15px;font-family:inherit;color:#1b1f2a}
+  .pick small{display:block;color:var(--sub);margin-top:2px}
+  .tip{font-size:12px;color:var(--sub);margin-top:8px}
   #file{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 </style>
 </head>
@@ -34,10 +49,11 @@
   <div class="head"><h1>📷 掃條碼</h1><a class="btn ghost sm" id="back" href="#">✕ 返回</a></div>
   <div class="box" id="box"><video id="v" playsinline muted></video><div class="aim"></div></div>
   <div class="msg" id="msg">開啟相機中…</div>
+  <div class="res hidden" id="res"></div>
   <div class="row"><label class="btn ghost" for="file">📸 拍照辨識</label><button class="btn ghost" id="retry">↻ 重新掃描</button></div>
   <input type="file" id="file" accept="image/*" capture="environment">
   <div class="manual"><input id="code" inputmode="numeric" placeholder="手動輸入條碼或商品コード"><button class="btn" id="go">查詢</button></div>
-  <div class="note">掃到條碼後會自動回到採購網站並找到商品，<b>不會自動採買</b>。<br>第一次使用請允許相機。</div>
+  <div class="note" id="note">相機會一直開著，掃到就直接顯示訂購／已買／剩餘，<b>不會自動採買</b>。要採買時按「到採買頁確認採買」。<br>第一次使用請允許相機。</div>
 </div>
 <script>
 (function(){
@@ -46,6 +62,9 @@
   if (!/^https:\/\/script\.google\.com\/(a\/[^\/]+\/)?macros\/s\/[A-Za-z0-9_-]+\/(exec|dev)$/.test(ret)) ret = '';
   // 採購網站帶來的登入憑證和店家，掃完原樣帶回去（不用每次重新登入）
   var tk = q.get('t') || '', st = q.get('s');
+  var TK_KEY = 'shihao_scan_tk';
+  if (!/^[A-Za-z0-9-]{10,80}$/.test(tk)) tk = '';
+  try { if (tk) localStorage.setItem(TK_KEY, tk); else tk = localStorage.getItem(TK_KEY) || ''; } catch (e) {}
   if (!/^[A-Za-z0-9-]{10,80}$/.test(tk)) tk = '';
   if (st != null) st = st.slice(0, 40);
   try { history.replaceState(null, '', location.pathname + '?ret=' + encodeURIComponent(ret)); } catch (e) {}
@@ -60,9 +79,88 @@
     location.href = ret + (ps.length ? '?' + ps.join('&') : '');
   }
   $('back').onclick = function(e){ e.preventDefault(); stop(); goBack(''); };
-  $('go').onclick = function(){ var c=$('code').value.replace(/\s/g,''); if(!c){ msg('請輸入條碼',true); return; } stop(); goBack(c); };
+  $('go').onclick = function(){ var c=$('code').value.replace(/\s/g,''); if(!c){ msg('請輸入條碼',true); return; } $('code').blur(); S.done=false; found(c); };
   $('code').addEventListener('keydown', function(e){ if(e.key==='Enter') $('go').click(); });
-  $('retry').onclick = start;
+  $('retry').onclick = function(){ hideRes(); start(); };
+
+  // ---- 商品資料（從採購網站只讀取得，用來在這頁直接顯示數量）----
+  var D = { list:null, at:0, loading:false, n:0, shown:null };
+  function esc(t){ return String(t==null?'':t).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function fmt(n){ n=Number(n)||0; return String(Math.round(n*100)/100); }
+  function loadData(done){
+    if (!ret || !tk || D.loading) { if(done) done(); return; }
+    D.loading = true;
+    var name = '__scanData' + (++D.n) + '_' + Date.now(), s = document.createElement('script'), t;
+    function end(r){ clearTimeout(t); D.loading=false; try{ delete window[name]; }catch(e){ window[name]=undefined; } if(s.parentNode) s.parentNode.removeChild(s);
+      if (r && r.ok && r.products) { D.list = r.products; D.at = Date.now(); }
+      else if (r && /LOGIN/.test(r.error||'')) { D.list = null; tk = ''; try{ localStorage.removeItem(TK_KEY); }catch(e){} }
+      if (done) done(r); }
+    window[name] = function(r){ end(r); };
+    t = setTimeout(function(){ end(null); }, 25000);
+    s.onerror = function(){ end(null); };
+    s.src = ret + '?api=products&t=' + encodeURIComponent(tk) + '&callback=' + name + '&_=' + Date.now();
+    document.head.appendChild(s);
+  }
+  // 比對規則跟採購網站一樣：先比前 13 碼（JAN／_條碼對照），再比迪士尼 9 碼商品コード
+  function normCode(v){
+    var b=String(v==null?'':v).replace(/\s/g,'');
+    if(/^\d+\.0$/.test(b)) b=b.slice(0,-2);
+    if(!/^\d+$/.test(b)) return '';
+    if(b.charAt(0)!=='0' && (b.length===12||b.length===25)) b='0'+b;
+    return b;
+  }
+  function matchCode(raw){
+    var b=normCode(raw), out=[], seen={}, L=D.list||[];
+    if(!b) return { code:String(raw||'').trim(), list:out };
+    function add(p){ if(!seen[p.key]){ seen[p.key]=1; out.push(p); } }
+    var j=b.slice(0,13);
+    L.forEach(function(p){ if(p.scanJan && p.scanJan===j) add(p); });
+    if(!out.length){
+      var c = b.length===9 ? b : ((b.length>=12 && b.charAt(0)==='0') ? b.substr(3,9) : '');
+      if(c) L.forEach(function(p){ if(p.scanCode===c) add(p); });
+    }
+    if(!out.length) L.forEach(function(p){ var pj=normCode(p.jan); if(pj && (pj===b || (pj.length>=13 && pj.slice(0,13)===j))) add(p); });
+    return { code:b, list:out };
+  }
+  function hideRes(){ D.shown=null; $('res').classList.add('hidden'); $('res').innerHTML=''; $('box').classList.remove('small'); }
+  function showRes(html){ $('res').innerHTML=html; $('res').classList.remove('hidden'); $('box').classList.add('small'); }
+  var CONT = '<div class="row"><button class="btn" data-a="cont">↻ 繼續掃描</button></div>';
+  function showOne(p, code){
+    D.shown = { key:p.key, code:code };
+    var done = (Number(p.remaining)||0) <= 0;
+    showRes('<div class="top">' + (p.img ? '<img src="'+esc(p.img)+'" alt="" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">' : '')
+      + '<div><div class="nm">'+esc(p.name)+'</div><div class="sub">'+esc(p.store)+(p.spec?'｜'+esc(p.spec):'')+(p.nameJp?'<br>'+esc(p.nameJp):'')+'</div></div></div>'
+      + '<div class="nums"><div>訂購<b>'+fmt(p.ordered)+'</b></div><div>已買<b>'+fmt(p.bought)+'</b></div><div class="'+(done?'done':'rem')+'">剩餘<b>'+fmt(p.remaining)+'</b></div></div>'
+      + (done ? '<div class="sub" style="margin-bottom:8px">✅ 這個已經買夠了</div>' : '')
+      + '<div class="row"><button class="btn ghost" data-a="cont">↻ 繼續掃描</button><button class="btn" data-a="buy">🛒 到採買頁確認採買</button></div>'
+      + '<div class="tip">條碼 '+esc(code)+'｜掃描只查詢，不會改任何數量。</div>');
+  }
+  function showFound(raw){
+    var r = matchCode(raw);
+    msg('');
+    if (r.list.length === 1) return showOne(r.list[0], r.code);
+    if (r.list.length > 1) {
+      D.shown = null; D.pick = r;
+      return showRes('<div class="nm">這個條碼對到 '+r.list.length+' 個商品，請選一個：</div>'
+        + r.list.map(function(p,i){ return '<button class="pick" data-i="'+i+'">'+esc(p.name)+'<small>'+esc(p.store)+(p.spec?'｜'+esc(p.spec):'')+'｜訂購 '+fmt(p.ordered)+'・已買 '+fmt(p.bought)+'・剩餘 '+fmt(p.remaining)+'</small></button>'; }).join('')
+        + CONT);
+    }
+    D.shown = null;
+    showRes('<div class="bad">查無對應商品</div><div class="sub">條碼 '+esc(r.code)+'</div>'
+      + '<div class="row"><button class="btn" data-a="cont">↻ 重新掃描</button><button class="btn ghost" data-a="manual">回採購頁手動搜尋</button></div>');
+  }
+  $('res').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    if (b.dataset.i != null && D.pick) { var p = D.pick.list[+b.dataset.i]; if(p) showOne(p, D.pick.code); return; }
+    var a = b.dataset.a;
+    if (a === 'cont') { hideRes(); resume(); }
+    else if (a === 'buy' && D.shown) { stop(); goBack(D.shown.code); }
+    else if (a === 'manual') { stop(); goBack(''); }
+  });
+  function refreshShown(){
+    if (D.list && Date.now() - D.at < 20000) return;
+    loadData(function(){ if (D.shown && D.list) { var k=D.shown.key, c=D.shown.code, p=D.list.filter(function(x){ return x.key===k; })[0]; if(p && D.shown && D.shown.key===k) showOne(p, c); } });
+  }
 
   // ---- 條碼程式（ZXing）----
   var ZX = ['https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js','https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js'];
@@ -96,11 +194,18 @@
   function found(txt){
     if(S.done) return; S.done=true;
     if(navigator.vibrate) try{ navigator.vibrate(80); }catch(e){}
+    S.last = txt; S.lastAt = Date.now();
+    if (D.list) { S.paused = true; showFound(txt); refreshShown(); return; }   // 連續掃描：相機不關，直接顯示
     stop(); msg('掃到：' + txt + '，回到採購網站中…');
     goBack(txt);
   }
+  function resume(){   // 相機一直開著，只是重新開始辨識 → 不會再問相機權限
+    S.done=false; S.paused=false;
+    if (S.on && S.stream) { msg('把條碼對準白框（可左右轉動手機）'); if (S.kick) S.kick(); }
+    else start();
+  }
   function start(){
-    stop(); S.done=false; $('box').classList.remove('hidden');
+    stop(); S.done=false; S.paused=false; $('box').classList.remove('hidden');
     if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){
       $('box').classList.add('hidden');
       msg(inApp() ? '這個 App 內建瀏覽器不能開相機，請改用 Safari／Chrome 開啟採購網站，或按「📸 拍照辨識」。' : '這個瀏覽器不能開相機，請按「📸 拍照辨識」或手動輸入。', true); return;
@@ -112,18 +217,20 @@
       if(my!==S.seq){ st.getTracks().forEach(function(t){ t.stop(); }); return; }
       S.stream=st; S.on=true; v.setAttribute('playsinline',''); v.muted=true; v.srcObject=st;
       var p=v.play(); if(p&&p.catch) p.catch(function(){});
-      msg('把條碼對準白框（可左右轉動手機）');
+      if(!S.done) msg(D.list || !tk ? '把條碼對準白框（可左右轉動手機）' : '把條碼對準白框（商品資料載入中…）');
       var r=core(Z), c=document.createElement('canvas'), x=c.getContext('2d',{willReadFrequently:true}), det=detector();
-      (function tick(){
+      S.kick = function(){ if(S.timer){ clearTimeout(S.timer); } S.timer=setTimeout(tick,300); };
+      function tick(){
         if(!S.on||S.done||my!==S.seq) return;
         var next=function(){ if(S.on&&!S.done&&my===S.seq) S.timer=setTimeout(tick,180); };
         if(!v.videoWidth) return next();
         if(c.width!==v.videoWidth){ c.width=v.videoWidth; c.height=v.videoHeight; }
         x.drawImage(v,0,0,c.width,c.height);
-        var fin=function(t){ if(t) found(t); else next(); };
+        var fin=function(t){ if(t && !(t===S.last && Date.now()-S.lastAt<2500)) found(t); else next(); };
         if(det) det.detect(c).then(function(res){ fin(res&&res[0]?res[0].rawValue:dec(Z,r,c)); }).catch(function(){ fin(dec(Z,r,c)); });
         else fin(dec(Z,r,c));
-      })();
+      }
+      tick();
     }).catch(function(e){
       if(my!==S.seq) return;
       stop(); $('box').classList.add('hidden');
@@ -137,7 +244,7 @@
   function inApp(){ return /Instagram|FBAN|FBAV|FB_IAB|FBIOS|Line\/|KAKAOTALK|MicroMessenger|GSA\/|Threads|Barcelona/i.test(navigator.userAgent); }
 
   // ---- 拍照辨識（備用）----
-  $('file').addEventListener('click', function(){ stop(); try{ this.value=''; }catch(e){} });
+  $('file').addEventListener('click', function(){ stop(); S.done=false; hideRes(); try{ this.value=''; }catch(e){} });
   $('file').onchange = function(){
     var f=this.files&&this.files[0]; if(!f) return;
     msg('辨識照片中…（約 1～3 秒）');
@@ -162,8 +269,16 @@
       msg(e.message==='NOT_FOUND'?'照片裡讀不到條碼。請靠近一點、讓條碼橫放填滿畫面、避免反光再拍一次。':e.message, true);
     });
   };
-  document.addEventListener('visibilitychange', function(){ if(document.hidden) stop(); });
+  document.addEventListener('visibilitychange', function(){
+    if (document.hidden) { S.wasOn = S.on; stop(); }
+    else if (S.wasOn && !S.paused) { S.wasOn = false; start(); }
+  });
   start();
+  if (ret && tk) loadData(function(r){
+    if (r && r.ok) { if (S.on && !S.done) msg('把條碼對準白框（可左右轉動手機）'); }
+    else { $('note').innerHTML = '目前讀不到商品資料'+(r&&/LOGIN/.test(r.error||'')?'（登入已過期）':'')+'，掃到後會回到採購網站找商品，<b>不會自動採買</b>。'; if (S.on && !S.done) msg('把條碼對準白框（可左右轉動手機）'); }
+  });
+  else $('note').innerHTML = '掃到條碼後會回到採購網站並找到商品，<b>不會自動採買</b>。';
 })();
 </script>
 </body>
