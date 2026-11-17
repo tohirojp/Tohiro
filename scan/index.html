@@ -44,11 +44,20 @@
   // 只允許回到十浩的 Google Apps Script 網站（避免被拿去轉址到別的網站）
   var q = new URLSearchParams(location.search), ret = q.get('ret') || '';
   if (!/^https:\/\/script\.google\.com\/(a\/[^\/]+\/)?macros\/s\/[A-Za-z0-9_-]+\/(exec|dev)$/.test(ret)) ret = '';
+  // 採購網站帶來的登入憑證和店家，掃完原樣帶回去（不用每次重新登入）
+  var tk = q.get('t') || '', st = q.get('s');
+  if (!/^[A-Za-z0-9-]{10,80}$/.test(tk)) tk = '';
+  if (st != null) st = st.slice(0, 40);
+  try { history.replaceState(null, '', location.pathname + '?ret=' + encodeURIComponent(ret)); } catch (e) {}
   var $ = function(id){ return document.getElementById(id); };
   function msg(t, bad){ var m=$('msg'); m.textContent=t; m.className='msg'+(bad?' bad':''); }
   function goBack(code){
     if (!ret) { msg(code ? '掃到：' + code + '（沒有返回網址，請回採購網站手動輸入）' : '沒有返回網址，請直接切回採購網站。', !code); return; }
-    location.href = ret + (code ? '?scan=' + encodeURIComponent(code) : '');
+    var ps = [];
+    if (code) ps.push('scan=' + encodeURIComponent(code));
+    if (tk) ps.push('t=' + encodeURIComponent(tk));
+    if (st != null) ps.push('s=' + encodeURIComponent(st));
+    location.href = ret + (ps.length ? '?' + ps.join('&') : '');
   }
   $('back').onclick = function(e){ e.preventDefault(); stop(); goBack(''); };
   $('go').onclick = function(){ var c=$('code').value.replace(/\s/g,''); if(!c){ msg('請輸入條碼',true); return; } stop(); goBack(c); };
