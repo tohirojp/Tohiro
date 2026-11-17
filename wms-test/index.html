@@ -350,11 +350,12 @@ function viewReceive(){
     enqueue({ action:'receiveScan', args:{ batch:batch, code:code, productId:productId||'', qty:qty, undo:isUndo, reqId:rid() },
       ok:function(d){
         if(d.choose){ beep(false); choose(d.choose,function(p){ send(code,p.id); }); return; }
-        if(d.notFound){ beep(false); flash('bad','查無對應商品：'+esc(d.code)+'<br><span style="font-weight:400">沒有入庫，已記到「異常」。可以請管理員對應條碼，或手動輸入商品ID。</span>'); return; }
+        if(d.ignored){ beep(false); flash('warn','這不是商品條碼（'+esc(String(d.code).slice(0,40))+'），已忽略。請掃商品的 JAN 條碼。'); return; }
+        if(d.notFound){ beep(false); flash('bad','查無對應商品：'+esc(d.code)); return; }
         beep(true);
         var dm=d.demand||{};
         flash(isUndo?'warn':'ok', prodCard(d.product,'<div style="text-align:right"><div class="big">'+(isUndo?'−':'+')+qty+'</div><div class="meta">本批 '+d.inBatch+' 件</div></div>')
-          +'<div class="meta" style="margin-top:6px;color:inherit">可配貨 '+d.stock['可配貨']+'・訂單需求 '+dm.need+'・還沒配貨 '+dm.waiting+(dm.need===0?'・<b>沒有訂單（溢採）</b>':'')+'</div>');
+          +'<div class="meta" style="margin-top:6px;color:inherit">可配貨 '+d.stock['可配貨']+'・訂單需求 '+dm.need+'・還沒配貨 '+dm.waiting+(dm.need===0?'・<b>沒有訂單（溢採）'+(d.product.store==='未對應'?'，請管理員對應品名':'')+'</b>':'')+'</div>');
         if($('qty')) $('qty').value=1;
         loadSum.later();
       },
@@ -663,7 +664,7 @@ function viewExc(){
     $('lst').innerHTML = d.list.length ? d.list.map(function(x,i){
       var acts = x.type==='揀貨缺貨'
         ? '<button class="btn green sm" data-a="found" data-i="'+i+'">找到了，回可配貨</button> <button class="btn red sm" data-a="lost" data-i="'+i+'">確認遺失</button>'
-        : (x.type==='未知條碼' ? '<button class="btn sm" data-a="map" data-i="'+i+'">指定對應商品</button> ' : '') + '<button class="btn gray sm" data-a="done" data-i="'+i+'">標記已處理</button>';
+        : ((x.type==='未知條碼'||x.type==='未對應商品') ? '<button class="btn sm" data-a="map" data-i="'+i+'">指定對應商品</button> ' : '') + '<button class="btn gray sm" data-a="done" data-i="'+i+'">標記已處理</button>';
       return '<div class="card"><div class="row"><span class="pill r">'+esc(x.type)+'</span><b class="grow">'+esc(x.name||x.code||x.pid)+'</b><span class="q">'+x.qty+'</span></div>'
         +'<div class="meta">'+esc(x.time)+'・'+esc(x.by)+'・'+esc(x.doc)+'</div><div class="meta">'+esc(x.note)+'</div><div style="margin-top:8px">'+acts+'</div></div>';
     }).join('') : '<div class="card meta">沒有待處理的異常 👍</div>';
@@ -682,7 +683,7 @@ function viewExc(){
       $('mr').innerHTML=d.list.map(function(p,i){ return '<div class="item" data-i="'+i+'" style="cursor:pointer">'+img(p.img)+'<div class="grow">'+esc(p.name)+'<div class="meta">'+esc(p.store)+'・'+esc(p.id)+'</div></div></div>'; }).join('')||'<div class="meta">找不到</div>';
       Array.prototype.forEach.call($('mr').querySelectorAll('[data-i]'),function(el){ el.onclick=function(){
         var p=d.list[+el.getAttribute('data-i')];
-        api('mapCode',{ code:x.code, productId:p.id }).then(function(){ closeModal(); toast('已對應，下次掃這個條碼就會找到「'+p.name+'」。請重新掃描入庫。'); }).catch(function(e){ toast(e.message); });
+        api('mapCode',{ code:x.code, productId:p.id, excId:x.id }).then(function(r){ closeModal(); toast('已對應「'+p.name+'」'+(r.moved?'，已轉入 '+r.moved+' 件':'')); viewExc(); }).catch(function(e){ toast(e.message); });
       }; });
     }).catch(function(e){ toast(e.message); }); };
   }
