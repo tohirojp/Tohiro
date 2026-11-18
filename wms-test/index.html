@@ -252,8 +252,8 @@ function flash(kind, html){ var f=$('flash'); if(f) f.innerHTML='<div class="fla
 function busy(btn, p){ if(btn){ btn.disabled=true; } return p.then(function(x){ if(btn) btn.disabled=false; return x; },function(e){ if(btn) btn.disabled=false; throw e; }); }
 
 // ====== 畫面切換 ======
-function go(view, arg){ stopCam(); st.stack.push({ view:st.view, arg:st.arg }); st.view=view; st.arg=arg; render(); window.scrollTo(0,0); }
-function back(){ stopCam(); var p=st.stack.pop()||{ view:'home' }; st.view=p.view; st.arg=p.arg; render(); }
+function go(view, arg){ stopCam(); window.onbeforeunload=null; st.stack.push({ view:st.view, arg:st.arg }); st.view=view; st.arg=arg; render(); window.scrollTo(0,0); }
+function back(){ stopCam(); window.onbeforeunload=null; var p=st.stack.pop()||{ view:'home' }; st.view=p.view; st.arg=p.arg; render(); }
 function logoutLocal(){ st.token=''; st.user=null; lsSet(LS.tok,null); lsSet(LS.user,null); }
 $('hdrBack').onclick=back;
 $('hdrOut').onclick=function(){ api('logout',{}).catch(function(){}); logoutLocal(); stopCam(); st.view='home'; st.stack=[]; render(); };
@@ -329,41 +329,108 @@ function choose(list, cb){
 function closeModal(){ var m=$('modal'); if(m) m.innerHTML=''; }
 function prodCard(p, right){ return '<div class="prod">'+img(p.img)+'<div class="grow"><div class="n">'+esc(p.name)+'</div><div class="meta">'+esc(p.store||'')+(p.spec?'・'+esc(p.spec):'')+'</div></div>'+(right||'')+'</div>'; }
 
-// ====== 理貨入庫 ======
+// ====== 理貨入庫（快速模式：手機上馬上顯示，背景每秒批次送出） ======
+var cat = { list:null, byId:{}, codes:[], at:0 };
+function loadCatalog(){
+  return api('catalog',{}).then(function(d){
+    cat.list=d.list.map(function(r){ return { id:r[0], jan:r[1], code:r[2], name:r[3], store:r[4], img:r[5], spec:r[6] }; });
+    cat.byId={}; cat.list.forEach(function(p){ cat.byId[p.id]=p; });
+    cat.codes=d.codes; cat.at=Date.now();
+  });
+}
+function normCodeL(v){
+  var b=String(v==null?'':v).replace(/\s/g,'');
+  if(/^\d+\.0$/.test(b)) b=b.slice(0,-2);
+  if(/^\d+$/.test(b) && b.charAt(0)!=='0' && (b.length===12||b.length===25)) b='0'+b;
+  return b.toUpperCase();
+}
+// 與後端相同的比對規則
+function matchLocal(raw){
+  var b=normCodeL(raw), out=[], seen={};
+  function add(p){ if(p && !seen[p.id]){ seen[p.id]=1; out.push(p); } }
+  if(!b || !cat.list) return { code:b, list:out };
+  cat.codes.forEach(function(c){ if(c[0]===b) add(cat.byId[c[1]]); });
+  if(out.length) return { code:b, list:out };
+  add(cat.byId[b]); cat.list.forEach(function(p){ if(p.id.toUpperCase()===b) add(p); });
+  if(out.length) return { code:b, list:out };
+  var j13=b.slice(0,13);
+  cat.list.forEach(function(p){ if(!p.jan) return; if(p.jan===b || (b.length>13 && p.jan===j13) || (p.jan.length>13 && p.jan.slice(0,13)===b && b.length===13)) add(p); });
+  if(out.length) return { code:b, list:out };
+  var c=/^\d{9}$/.test(b)?b:((/^\d{12,}$/.test(b)&&b.charAt(0)==='0')?b.substr(3,9):'');
+  if(c) cat.list.forEach(function(p){ if(p.code===c) add(p); });
+  return { code:b, list:out };
+}
 function viewReceive(){
   setHeader('📦 理貨入庫');
-  var undo=false;
+  var undo=false, pend=[], sending=false, timer=null, info={}, local={}, tries=0;
   app.innerHTML='<div class="card"><label class="l" style="margin-top:0">到貨批次（同一批貨用同一個名稱）</label><input id="batch" placeholder="例如 1120 到貨" value="'+esc(lsGet(LS.batch))+'"></div>'
     + scanBar('掃商品條碼（掃碼槍／輸入後按 Enter）',
       '<div class="row" style="margin-top:8px"><div class="toggle grow"><button id="mIn" class="on">＋ 入庫</button><button id="mUndo">－ 退掃</button></div>'
-      +'<div style="width:96px"><input id="qty" type="number" inputmode="numeric" min="1" value="1" title="一次幾件"></div></div>')
+      +'<div style="width:96px"><input id="qty" type="number" inputmode="numeric" min="1" value="1" title="一次幾件"></div></div>'
+      +'<div class="meta" style="margin-top:6px">💡 同一商品很多件：先在右邊填件數（例如 24），再掃一次就好。</div>')
     + '<div class="card" id="sum"><div class="meta">本批明細載入中…</div></div>';
-  $('batch').onchange=function(){ lsSet(LS.batch,$('batch').value.trim()); loadSum(); };
+  $('batch').onchange=function(){ lsSet(LS.batch,$('batch').value.trim()); local={}; loadSum(); };
   $('mIn').onclick=function(){ undo=false; $('mIn').className='on'; $('mUndo').className=''; };
   $('mUndo').onclick=function(){ undo=true; $('mUndo').className='on red'; $('mIn').className=''; };
-  function send(code, productId){
+  if(!cat.list || Date.now()-cat.at>5*60000) loadCatalog().catch(function(){ cat.list=null; });
+  function pendInfo(){ var e=$('qInfo'); if(e) e.textContent = pend.length||sending ? ('⏳ 傳送中 '+(pend.length+(sending?sending:0))+' 筆（可以繼續掃）') : '✓ 已全部存檔'; }
+  function show(p, q, isUndo, state){
+    var i=info[p.id]||{}, l=local[p.id]||0;
+    var inBatch=(i.inBatch||0)+l, avail=(i.avail||0)+l;
+    flash(isUndo?'warn':'ok', prodCard(p,'<div style="text-align:right"><div class="big">'+(isUndo?'−':'+')+q+'</div><div class="meta">本批 '+inBatch+' 件</div></div>')
+      +'<div class="meta" style="margin-top:6px;color:inherit">'+(state||'')+'可配貨 '+avail+(i.need!==undefined?'・訂單需求 '+i.need+'・還沒配貨 '+i.waiting+(i.need===0?'・<b>沒有訂單（溢採）</b>':''):'')+'</div>');
+  }
+  function onCode(raw, productId){
     var batch=$('batch').value.trim();
     if(!batch){ beep(false); flash('bad','請先輸入到貨批次名稱'); $('batch').focus(); return; }
     lsSet(LS.batch,batch);
-    var qty=Math.max(1,parseInt($('qty').value,10)||1);
-    var isUndo=undo;
-    enqueue({ action:'receiveScan', args:{ batch:batch, code:code, productId:productId||'', qty:qty, undo:isUndo, reqId:rid() },
-      ok:function(d){
-        if(d.choose){ beep(false); choose(d.choose,function(p){ send(code,p.id); }); return; }
-        if(d.ignored){ beep(false); flash('warn','這不是商品條碼（'+esc(String(d.code).slice(0,40))+'），已忽略。請掃商品的 JAN 條碼。'); return; }
-        if(d.notFound){ beep(false); flash('bad','查無對應商品：'+esc(d.code)); return; }
-        beep(true);
-        var dm=d.demand||{};
-        flash(isUndo?'warn':'ok', prodCard(d.product,'<div style="text-align:right"><div class="big">'+(isUndo?'−':'+')+qty+'</div><div class="meta">本批 '+d.inBatch+' 件</div></div>')
-          +'<div class="meta" style="margin-top:6px;color:inherit">可配貨 '+d.stock['可配貨']+'・訂單需求 '+dm.need+'・還沒配貨 '+dm.waiting+(dm.need===0?'・<b>沒有訂單（溢採）'+(d.product.store==='未對應'?'，請管理員對應品名':'')+'</b>':'')+'</div>');
-        if($('qty')) $('qty').value=1;
-        loadSum.later();
-      },
-      fail:function(e){ beep(false); flash('bad',esc(e.message)); } });
+    var m=matchLocal(raw), code=m.code;
+    if(!productId){
+      if(!/^[0-9A-Z-]{6,30}$/.test(code) || /^HTTP/.test(code)){ beep(false); flash('warn','這不是商品條碼（'+esc(code.slice(0,40))+'），已忽略。'); return; }
+      if(m.list.length>1){ beep(false); choose(m.list,function(p){ onCode(raw,p.id); }); return; }
+    }
+    var p=productId?cat.byId[productId]:m.list[0];
+    var qty=Math.max(1,parseInt($('qty').value,10)||1), isUndo=undo;
+    if(!p && isUndo){ beep(false); flash('bad','找不到這個條碼的商品，不能退掃'); return; }
+    var pid=p?p.id:'JAN:'+code;
+    if(!p){ p={ id:pid, name:'未對應商品 '+code, store:'未對應', img:'' }; cat.byId[pid]=p; }
+    beep(true);
+    local[pid]=(local[pid]||0)+(isUndo?-qty:qty);
+    show(p, qty, isUndo, cat.list?'':'');
+    pend.push({ reqId:rid(), code:code, productId:(cat.byId[pid] && cat.list && cat.list.indexOf(cat.byId[pid])>=0)?pid:'', qty:qty, undo:isUndo, _pid:pid, _q:isUndo?-qty:qty });
+    if($('qty')) $('qty').value=1;
+    pendInfo(); schedule(400);
   }
-  bindScan(function(c){ send(c); });
+  function schedule(ms){ if(!timer) timer=setTimeout(flush, ms); }
+  function flush(){
+    timer=null;
+    if(sending || !pend.length) return;
+    var items=pend.slice(0,50), batch=$('batch')?$('batch').value.trim():lsGet(LS.batch);
+    sending=items.length; pendInfo();
+    api('receiveBatch',{ batch:batch, items:items.map(function(x){ return { reqId:x.reqId, code:x.code, productId:x.productId, qty:x.qty, undo:x.undo }; }) }).then(function(d){
+      tries=0;
+      pend.splice(0, items.length);
+      items.forEach(function(x){ local[x._pid]=(local[x._pid]||0)-x._q; });
+      Object.keys(d.info||{}).forEach(function(k){ info[k]=d.info[k]; });
+      var bad=d.results.filter(function(r){ return r.status==='error' || r.status==='choose'; });
+      d.results.forEach(function(r){ if(r.status==='ok' && r.product && !(cat.byId[r.product.id] && cat.list.indexOf(cat.byId[r.product.id])>=0)){ cat.byId[r.product.id]=r.product; if(cat.list) cat.list.push(r.product); } });
+      sending=false; pendInfo();
+      if(bad.length){ beep(false); flash('bad', bad.map(function(r){ return esc(r.error||'這個條碼對到多個商品，請用手動輸入選擇'); }).join('<br>')); }
+      else { var last=items[items.length-1], p=cat.byId[last._pid]; if(p && !pend.length) show(p, Math.abs(last._q), last._q<0, '✓ 已存檔・'); }
+      loadSum.later();
+      if(pend.length) schedule(100);
+    }).catch(function(e){
+      sending=false; tries++;
+      if(e.message==='不明的操作'){ flash('bad','後端程式還是舊版：請貼上 Code.gs v3，並在「管理部署作業」部署「新版本」。（'+pend.length+' 筆還沒存檔，更新後會自動送出）'); schedule(10000); return; }
+      var e2=$('qInfo'); if(e2) e2.textContent='⚠️ 傳送失敗，'+(tries<6?'自動重試中…':'請檢查網路')+'（'+pend.length+' 筆還沒存檔，不會遺失也不會重複）';
+      schedule(Math.min(15000, 1500*tries));
+    });
+  }
+  window.onbeforeunload=function(){ return pend.length?'還有掃碼沒存檔':undefined; };
+  bindScan(function(c){ onCode(c); });
   function loadSum(){
-    var b=$('batch').value.trim();
+    var b=$('batch')?$('batch').value.trim():'';
+    if(!$('sum')) return;
     if(!b){ $('sum').innerHTML='<div class="meta">輸入批次名稱後開始掃碼</div>'; return; }
     api('receiveSummary',{ batch:b }).then(function(d){
       if(!$('sum')) return;
@@ -372,7 +439,7 @@ function viewReceive(){
         + (d.batches.length>1?'<div class="meta" style="margin-top:6px">其他批次：'+d.batches.filter(function(x){ return x!==b; }).map(esc).join('、')+'</div>':'');
     }).catch(function(){});
   }
-  loadSum.later=function(){ clearTimeout(loadSum.t); loadSum.t=setTimeout(loadSum,1200); };
+  loadSum.later=function(){ clearTimeout(loadSum.t); loadSum.t=setTimeout(loadSum,4000); };
   loadSum();
 }
 
